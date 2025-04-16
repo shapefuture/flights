@@ -8,6 +8,7 @@ global.beforeEach = vi.beforeEach;
 global.afterEach = vi.afterEach;
 global.beforeAll = vi.beforeAll;
 global.afterAll = vi.afterAll;
+global.jest = vi;
 
 // Mock chrome API
 global.chrome = {
@@ -47,7 +48,9 @@ global.fetch = vi.fn(() =>
   Promise.resolve({
     ok: true,
     json: () => Promise.resolve({}),
-    text: () => Promise.resolve('')
+    text: () => Promise.resolve(''),
+    status: 200,
+    headers: new Headers()
   }) as any
 );
 

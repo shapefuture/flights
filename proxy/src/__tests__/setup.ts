@@ -8,18 +8,17 @@ global.beforeEach = vi.beforeEach;
 global.afterEach = vi.afterEach;
 global.beforeAll = vi.beforeAll;
 global.afterAll = vi.afterAll;
+global.jest = vi;
 
 // Mock fetch API
-global.fetch = vi.fn(() => 
+global.fetch = vi.fn().mockImplementation(() => 
   Promise.resolve({
     ok: true,
     json: () => Promise.resolve({}),
     text: () => Promise.resolve(''),
     status: 200,
-    headers: {
-      get: () => null
-    }
-  }) as any
+    headers: new Headers({})
+  })
 );
 
 // Mock Response constructor
