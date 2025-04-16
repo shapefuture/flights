@@ -2,7 +2,11 @@ import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AuthProvider, useAuth } from '../auth-context';
-import { supabase, signInWithGoogle } from '../../lib/supabase';
+import { 
+  supabase, 
+  signInWithGoogle, 
+  AuthProvider as AuthProviderEnum 
+} from '../../lib/supabase';
 
 // Mock Supabase
 jest.mock('../../lib/supabase', () => ({
@@ -37,6 +41,14 @@ jest.mock('../../lib/supabase', () => ({
   },
 }));
 
+// Mock logger
+jest.mock('../../utils/logger', () => ({
+  debug: jest.fn(),
+  info: jest.fn(),
+  error: jest.fn(),
+  warn: jest.fn(),
+}));
+
 // Test component that uses the auth context
 function TestComponent() {
   const { 
@@ -45,7 +57,8 @@ function TestComponent() {
     signIn, 
     signOut,
     signInWithGoogle: googleSignIn,
-    isLoading
+    isLoading,
+    authProvider
   } = useAuth();
   
   return (
@@ -55,7 +68,12 @@ function TestComponent() {
       ) : (
         <>
           <p>Is authenticated: {isAuthenticated ? 'Yes' : 'No'}</p>
-          {user && <p>User ID: {user.id}</p>}
+          {user && (
+            <>
+              <p>User ID: {user.id}</p>
+              <p>Auth Provider: {authProvider || 'none'}</p>
+            </>
+          )}
           <button onClick={() => signIn('test@example.com', 'password')}>Sign In</button>
           <button onClick={() => googleSignIn()}>Sign In with Google</button>
           <button onClick={() => signOut()}>Sign Out</button>
@@ -92,7 +110,7 @@ describe('AuthContext', () => {
     });
   });
   
-  it('handles sign in', async () => {
+  it('handles email sign in', async () => {
     // Mock successful sign in
     (supabase.auth.signInWithPassword as jest.Mock).mockResolvedValue({
       data: { 
@@ -104,7 +122,12 @@ describe('AuthContext', () => {
     
     // Mock auth state change to reflect the user being signed in
     (supabase.auth.onAuthStateChange as jest.Mock).mockImplementation((callback) => {
-      callback('SIGNED_IN', { user: { id: 'test-user-id' } });
+      callback('SIGNED_IN', { 
+        user: { 
+          id: 'test-user-id',
+          // No provider specified, should default to EMAIL
+        } 
+      });
       return {
         data: {
           subscription: {
@@ -135,6 +158,11 @@ describe('AuthContext', () => {
       email: 'test@example.com',
       password: 'password',
     });
+    
+    // After auth state change, auth provider should be EMAIL
+    await waitFor(() => {
+      expect(screen.getByText('Auth Provider: email')).toBeInTheDocument();
+    });
   });
   
   it('handles Google sign in', async () => {
@@ -142,6 +170,24 @@ describe('AuthContext', () => {
     (signInWithGoogle as jest.Mock).mockResolvedValue({
       data: { provider: 'google', url: 'https://oauth.google.com/redirect' },
       error: null,
+    });
+    
+    // Mock auth state change for Google sign in
+    (supabase.auth.onAuthStateChange as jest.Mock).mockImplementation((callback) => {
+      callback('SIGNED_IN', { 
+        user: { 
+          id: 'google-user-id',
+          app_metadata: { provider: 'google' }, // Google provider
+          identities: [{ provider: 'google' }]
+        } 
+      });
+      return {
+        data: {
+          subscription: {
+            unsubscribe: jest.fn(),
+          },
+        },
+      };
     });
     
     render(
@@ -162,6 +208,42 @@ describe('AuthContext', () => {
     
     // Verify Google sign in was called
     expect(signInWithGoogle).toHaveBeenCalled();
+    
+    // After auth state change, auth provider should be GOOGLE
+    await waitFor(() => {
+      expect(screen.getByText('Auth Provider: google')).toBeInTheDocument();
+    });
+  });
+  
+  it('handles Google sign in error', async () => {
+    // Mock Google sign in error
+    const mockError = new Error('Google authentication failed');
+    (signInWithGoogle as jest.Mock).mockResolvedValue({
+      data: null,
+      error: mockError,
+    });
+    
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+    
+    await waitFor(() => {
+      expect(screen.getByText('Is authenticated: No')).toBeInTheDocument();
+    });
+    
+    // Click Google sign in button
+    const googleSignInButton = screen.getByText('Sign In with Google');
+    await act(async () => {
+      userEvent.click(googleSignInButton);
+    });
+    
+    // Verify Google sign in was called
+    expect(signInWithGoogle).toHaveBeenCalled();
+    
+    // User should remain unauthenticated
+    expect(screen.getByText('Is authenticated: No')).toBeInTheDocument();
   });
   
   it('handles sign out', async () => {
@@ -169,7 +251,10 @@ describe('AuthContext', () => {
     (supabase.auth.getSession as jest.Mock).mockResolvedValue({
       data: { 
         session: { 
-          user: { id: 'test-user-id' } 
+          user: { 
+            id: 'test-user-id',
+            app_metadata: { provider: 'google' }
+          } 
         } 
       },
       error: null,
@@ -189,6 +274,7 @@ describe('AuthContext', () => {
     // Wait for auth state to reflect the user
     await waitFor(() => {
       expect(screen.getByText('User ID: test-user-id')).toBeInTheDocument();
+      expect(screen.getByText('Auth Provider: google')).toBeInTheDocument();
     });
     
     // Click sign out button
@@ -199,5 +285,60 @@ describe('AuthContext', () => {
     
     // Verify sign out was called
     expect(supabase.auth.signOut).toHaveBeenCalled();
+  });
+  
+  it('correctly determines auth provider from user metadata', async () => {
+    // Test with Google authentication
+    (supabase.auth.getSession as jest.Mock).mockResolvedValue({
+      data: { 
+        session: { 
+          user: { 
+            id: 'google-user',
+            app_metadata: { provider: 'google' },
+            identities: [{ provider: 'google' }]
+          } 
+        } 
+      },
+      error: null,
+    });
+    
+    const { unmount } = render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+    
+    await waitFor(() => {
+      expect(screen.getByText('Auth Provider: google')).toBeInTheDocument();
+    });
+    
+    // Unmount to clean up
+    unmount();
+    
+    // Reset mocks
+    jest.clearAllMocks();
+    
+    // Test with email authentication
+    (supabase.auth.getSession as jest.Mock).mockResolvedValue({
+      data: { 
+        session: { 
+          user: { 
+            id: 'email-user',
+            app_metadata: { provider: 'email' },
+          } 
+        } 
+      },
+      error: null,
+    });
+    
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+    
+    await waitFor(() => {
+      expect(screen.getByText('Auth Provider: email')).toBeInTheDocument();
+    });
   });
 });

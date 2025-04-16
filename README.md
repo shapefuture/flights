@@ -13,8 +13,10 @@ A web-based flight finding tool that accepts complex natural language queries an
 - **Saved Searches**: Store and reuse your favorite flight queries
 - **Intelligent Refinement**: Provide feedback to the agent to refine your search results
 - **Dark Mode & Mobile Optimized**: Enjoy a beautiful experience on any device at any time
-- **Google Authentication**: Quick and secure sign-in with your Google account
-- **Email Authentication**: Traditional email & password authentication as fallback
+- **Google Authentication**: Quick and secure sign-in with your Google account (primary method)
+- **Email Authentication**: Traditional email & password authentication as fallback option
+- **Comprehensive Error Handling**: Robust error handling and recovery throughout the application
+- **Detailed Logging**: Structured logging with different severity levels for debugging and monitoring
 - **Subscription Management**: Different pricing tiers for casual to frequent travelers
 - **Enhanced Mobile Experience**: Touch-optimized controls for natural mobile interaction
 - **Multi-language Support**: Interface available in multiple languages
@@ -31,6 +33,7 @@ This project follows an "Extension-Enhanced Pragmatist" architecture with Agenti
 - **Browser Extension (Data Agent)**: Optional component that fetches real-time flight data
 - **Authentication**: Supabase for user authentication (Google OAuth and email/password)
 - **Payments**: Stripe integration for subscription management
+- **Logging & Monitoring**: Structured logging system with error reporting and tracking
 
 ## Getting Started
 
@@ -113,6 +116,26 @@ This project uses Jest and React Testing Library for unit and integration tests:
 1. Run all tests: `pnpm test`
 2. Run with coverage: `pnpm test:coverage`
 3. Run end-to-end tests: `pnpm test:e2e`
+
+### Test Coverage
+
+The project includes comprehensive tests for all major components:
+
+- **Unit Tests**: Testing individual functions and components in isolation
+- **Integration Tests**: Testing interactions between multiple components
+- **Authentication Tests**: Specific tests for Google authentication and Supabase integration
+- **Error Handling Tests**: Tests for error scenarios and recovery
+- **Accessibility Tests**: Ensuring the application is accessible to all users
+
+## Error Handling and Logging
+
+The application implements robust error handling throughout:
+
+- **Structured Error Types**: Specific error classes for different types of errors
+- **Graceful Degradation**: The app remains functional even when parts fail
+- **User Feedback**: Clear error messages with recovery options
+- **Retry Mechanisms**: Automatic retries for transient failures
+- **Comprehensive Logging**: Different log levels for development vs. production
 
 ## Project Structure
 
