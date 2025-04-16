@@ -1,49 +1,35 @@
 import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 
 export default defineConfig({
+  plugins: [react()],
   test: {
-    environment: 'jsdom',
     globals: true,
-    setupFiles: [resolve(__dirname, 'src/setupTests.ts')],
-    include: ['src/**/__tests__/**/*.test.{ts,tsx}', 'src/**/__tests__/**/apiService.test.ts', 'src/**/__tests__/**/queryGenerator.test.ts'],
+    environment: 'jsdom',
+    setupFiles: ['./src/setupTests.ts'],
     exclude: [
-      '**/node_modules/**', 
+      '**/node_modules/**',
       '**/dist/**',
-      '**/setup.ts',
-      '**/setupTests.ts',
-      // Temporarily exclude test files with missing dependencies
-      '**/App.test.tsx',
-      '**/auth-context.test.tsx',
-      '**/auth-callback.test.tsx',
-      '**/flight-filters.test.tsx',
-      '**/google-sign-in-button.test.tsx',
-      '**/calendar-view.test.tsx',
-      '**/pricing-cards.test.tsx',
-      '**/error-boundary.test.tsx',
-      '**/logger.test.ts',
-      '**/extensionService.test.ts'
+      '**/cypress/**',
+      '**/.{idea,git,cache,output,temp}/**',
+      '**/{setup,setupTests}.{ts,tsx}',
     ],
-    mockReset: true,
-    restoreMocks: true,
-    testTimeout: 10000, // Increase timeout for async tests
+    reporters: ['verbose'],
     coverage: {
-      provider: 'v8', // or 'c8'
+      provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
-      reportsDirectory: './coverage',
       exclude: [
-        '**/node_modules/**',
-        '**/dist/**',
-        '**/coverage/**',
-        '**/__tests__/**',
-        '**/setup*.ts',
-        '**/*.d.ts'
+        'node_modules/',
+        'src/setupTests.ts',
+        '**/*.d.ts',
+        '**/__mocks__/**'
       ]
     }
   },
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src')
+      '@': resolve(__dirname, './src')
     }
   }
 });
