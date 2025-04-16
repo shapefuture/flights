@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ThemeProvider } from './components/theme-provider';
+import { AuthProvider, useAuth } from './context/auth-context';
 import { ThemeToggle } from './components/theme-toggle';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
@@ -13,7 +14,11 @@ import { VoiceSearch } from './components/voice-search';
 import { PriceAlertPanel } from './components/price-alert-panel';
 import { TripPlanner } from './components/trip-planner';
 import { NativeAppBanner } from './components/native-app-banner';
+import { UserAccountNav } from './components/auth/user-account-nav';
+import { AuthDialog } from './components/auth/auth-dialog';
+import { UsageMeter } from './components/subscription/usage-meter';
 import { callAgentApi } from './services/apiService';
+import { incrementQueriesUsed } from './lib/supabase';
 import { initializeI18n } from './i18n';
 import { debug, info, error } from './utils/logger';
 import { FlightResult, DetailedFlightInfo } from './types';
@@ -25,7 +30,21 @@ initializeI18n().catch(err => {
   error('Failed to initialize i18n:', err);
 });
 
-function App() {
+// Main app wrapper with providers
+function AppWrapper() {
+  return (
+    <AuthProvider>
+      <ThemeProvider>
+        <PreferencesProvider>
+          <AppContent />
+        </PreferencesProvider>
+      </ThemeProvider>
+    </AuthProvider>
+  );
+}
+
+function AppContent() {
+  const { isAuthenticated, user, canPerformSearch, remainingQueries } = useAuth();
   const [query, setQuery] = useState('');
   const [result, setResult] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -33,9 +52,22 @@ function App() {
   const [flightResults, setFlightResults] = useState<FlightResult[]>([]);
   const [selectedFlight, setSelectedFlight] = useState<DetailedFlightInfo | null>(null);
   const [showVoiceSearch, setShowVoiceSearch] = useState(false);
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
   
   const handleSearch = async () => {
     if (!query.trim()) return;
+    
+    // Check if user is authenticated for paid search
+    if (!isAuthenticated) {
+      setAuthDialogOpen(true);
+      return;
+    }
+    
+    // Check if user has remaining queries
+    if (!canPerformSearch) {
+      setError("You've reached your monthly search limit. Please upgrade your plan for more searches.");
+      return;
+    }
     
     setIsLoading(true);
     setError(null);
@@ -53,6 +85,11 @@ function App() {
       // Mock flight results for demonstration
       const mockResults = generateMockFlightResults();
       setFlightResults(mockResults);
+      
+      // Increment the user's query count
+      if (user) {
+        await incrementQueriesUsed(user.id);
+      }
       
     } catch (err) {
       error('Search error:', err);
@@ -178,121 +215,155 @@ function App() {
   };
   
   return (
-    <ThemeProvider>
-      <PreferencesProvider>
-        <div className="min-h-screen bg-background text-foreground">
-          <header className="sticky top-0 z-10 bg-background border-b">
-            <div className="container flex justify-between items-center py-4">
-              <h1 className="text-xl font-bold">Flight Finder Agent</h1>
-              <div className="flex items-center gap-2">
-                <ThemeToggle />
-                <LanguageSwitcher />
-                <PreferencePanel />
-              </div>
-            </div>
-          </header>
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="sticky top-0 z-10 bg-background border-b">
+        <div className="container flex justify-between items-center py-4">
+          <h1 className="text-xl font-bold">Flight Finder Agent</h1>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <LanguageSwitcher />
+            <PreferencePanel />
+            {isAuthenticated ? (
+              <UserAccountNav />
+            ) : (
+              <Button variant="default" onClick={() => setAuthDialogOpen(true)}>
+                Sign In
+              </Button>
+            )}
+          </div>
+        </div>
+      </header>
+      
+      <main className="container py-6 space-y-6">
+        <div className="max-w-3xl mx-auto space-y-4">
+          <h2 className="text-2xl font-bold tracking-tight">Your AI-powered assistant for finding the perfect flights</h2>
           
-          <main className="container py-6 space-y-6">
-            <div className="max-w-3xl mx-auto space-y-4">
-              <h2 className="text-2xl font-bold tracking-tight">Your AI-powered assistant for finding the perfect flights</h2>
-              
-              {showVoiceSearch ? (
-                <VoiceSearch 
-                  onTranscript={handleVoiceTranscript}
-                  className="mb-4"
+          {isAuthenticated && (
+            <UsageMeter className="mb-4" />
+          )}
+          
+          {showVoiceSearch ? (
+            <VoiceSearch 
+              onTranscript={handleVoiceTranscript}
+              className="mb-4"
+            />
+          ) : (
+            <div className="flex gap-2">
+              <Input
+                placeholder="Find me a flight from NYC to London next weekend with a return one week later"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                className="flex-1"
+              />
+              <Button onClick={() => setShowVoiceSearch(true)} variant="outline">
+                Voice
+              </Button>
+              <Button onClick={handleSearch} disabled={isLoading}>
+                {isLoading ? 'Searching...' : 'Search Flights'}
+              </Button>
+            </div>
+          )}
+          
+          {error && (
+            <div className="p-4 rounded-md bg-destructive/10 text-destructive">
+              <h3 className="font-bold">Error</h3>
+              <p>{error}</p>
+            </div>
+          )}
+          
+          {!isAuthenticated && (
+            <div className="p-4 rounded-md bg-muted">
+              <h3 className="font-bold">Sign in to search flights</h3>
+              <p className="text-sm text-muted-foreground">
+                Create an account or sign in to access our AI-powered flight search.
+              </p>
+              <Button 
+                variant="outline" 
+                className="mt-2"
+                onClick={() => setAuthDialogOpen(true)}
+              >
+                Sign In / Sign Up
+              </Button>
+            </div>
+          )}
+        </div>
+        
+        {result && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              {selectedFlight ? (
+                <DetailedFlightView 
+                  flight={selectedFlight} 
+                  onClose={handleCloseDetailView}
+                  onBook={handleBookFlight}
                 />
               ) : (
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Find me a flight from NYC to London next weekend with a return one week later"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                    className="flex-1"
-                  />
-                  <Button onClick={() => setShowVoiceSearch(true)} variant="outline">
-                    Voice
-                  </Button>
-                  <Button onClick={handleSearch} disabled={isLoading}>
-                    {isLoading ? 'Searching...' : 'Search Flights'}
-                  </Button>
-                </div>
-              )}
-              
-              {error && (
-                <div className="p-4 rounded-md bg-destructive/10 text-destructive">
-                  <h3 className="font-bold">Error</h3>
-                  <p>{error}</p>
+                <div className="space-y-4">
+                  <h2 className="text-xl font-bold">Flight Results</h2>
+                  <TouchControls>
+                    <VirtualizedFlightList 
+                      flights={flightResults} 
+                      onSelect={handleFlightSelect}
+                      className="min-h-[500px]"
+                    />
+                  </TouchControls>
                 </div>
               )}
             </div>
             
-            {result && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2">
-                  {selectedFlight ? (
-                    <DetailedFlightView 
-                      flight={selectedFlight} 
-                      onClose={handleCloseDetailView}
-                      onBook={handleBookFlight}
-                    />
-                  ) : (
-                    <div className="space-y-4">
-                      <h2 className="text-xl font-bold">Flight Results</h2>
-                      <TouchControls>
-                        <VirtualizedFlightList 
-                          flights={flightResults} 
-                          onSelect={handleFlightSelect}
-                          className="min-h-[500px]"
-                        />
-                      </TouchControls>
+            <div className="space-y-6">
+              {/* Agent status panel */}
+              <div className="border rounded-lg p-4">
+                <h3 className="font-bold mb-2">Agent Status</h3>
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Thinking</h4>
+                    <p className="text-sm mt-1">{result.thinking}</p>
+                  </div>
+                  
+                  {result.plan && (
+                    <div>
+                      <h4 className="text-sm font-medium text-muted-foreground">Plan</h4>
+                      <pre className="text-xs bg-muted p-2 rounded mt-1 overflow-auto">
+                        {JSON.stringify(result.plan, null, 2)}
+                      </pre>
                     </div>
                   )}
                 </div>
-                
-                <div className="space-y-6">
-                  {/* Agent status panel */}
-                  <div className="border rounded-lg p-4">
-                    <h3 className="font-bold mb-2">Agent Status</h3>
-                    <div className="space-y-4">
-                      <div>
-                        <h4 className="text-sm font-medium text-muted-foreground">Thinking</h4>
-                        <p className="text-sm mt-1">{result.thinking}</p>
-                      </div>
-                      
-                      {result.plan && (
-                        <div>
-                          <h4 className="text-sm font-medium text-muted-foreground">Plan</h4>
-                          <pre className="text-xs bg-muted p-2 rounded mt-1 overflow-auto">
-                            {JSON.stringify(result.plan, null, 2)}
-                          </pre>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {/* Price Alert Panel */}
-                  <PriceAlertPanel />
-                  
-                  {/* Trip Planner */}
-                  <TripPlanner selectedFlight={selectedFlight || undefined} />
-                </div>
               </div>
-            )}
-          </main>
-          
-          <footer className="border-t py-6 text-center text-sm text-muted-foreground mt-12">
-            <div className="container">
-              <p>© 2023 Flight Finder. All rights reserved.</p>
+              
+              {/* Price Alert Panel */}
+              <PriceAlertPanel />
+              
+              {/* Trip Planner */}
+              <TripPlanner selectedFlight={selectedFlight || undefined} />
             </div>
-          </footer>
-          
-          {/* Native App Promotion Banner */}
-          <NativeAppBanner />
+          </div>
+        )}
+      </main>
+      
+      <footer className="border-t py-6 text-center text-sm text-muted-foreground mt-12">
+        <div className="container">
+          <p>© 2023 Flight Finder. All rights reserved.</p>
+          <div className="flex justify-center gap-4 mt-2">
+            <a href="/pricing" className="hover:underline">Pricing</a>
+            <a href="/terms" className="hover:underline">Terms</a>
+            <a href="/privacy" className="hover:underline">Privacy</a>
+          </div>
         </div>
-      </PreferencesProvider>
-    </ThemeProvider>
+      </footer>
+      
+      {/* Native App Promotion Banner */}
+      <NativeAppBanner />
+      
+      {/* Authentication Dialog */}
+      <AuthDialog 
+        open={authDialogOpen}
+        onOpenChange={setAuthDialogOpen}
+      />
+    </div>
   );
 }
 
-export default App;
+export default AppWrapper;

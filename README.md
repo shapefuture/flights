@@ -12,6 +12,13 @@ A web-based flight finding tool that accepts complex natural language queries an
 - **Visual Presentation**: View results in a list or calendar format with rich filtering options
 - **Saved Searches**: Store and reuse your favorite flight queries
 - **Intelligent Refinement**: Provide feedback to the agent to refine your search results
+- **Dark Mode & Mobile Optimized**: Enjoy a beautiful experience on any device at any time
+- **User Authentication**: Secure login with Supabase email/password authentication
+- **Subscription Management**: Different pricing tiers for casual to frequent travelers
+- **Enhanced Mobile Experience**: Touch-optimized controls for natural mobile interaction
+- **Multi-language Support**: Interface available in multiple languages
+- **Trip Planning**: Comprehensive trip management including flights, hotels, and activities
+- **Voice Interface**: Natural language voice search capabilities
 
 ## Architecture
 
@@ -21,6 +28,8 @@ This project follows an "Extension-Enhanced Pragmatist" architecture with Agenti
 - **Proxy (Secure Gateway)**: Serverless function that securely interfaces with the LLM
 - **LLM (Reasoning/Planning Agent)**: External LLM that interprets queries, plans steps, and provides reasoning
 - **Browser Extension (Data Agent)**: Optional component that fetches real-time flight data
+- **Authentication**: Supabase for user authentication and management
+- **Payments**: Stripe integration for subscription management
 
 ## Getting Started
 
@@ -28,6 +37,8 @@ This project follows an "Extension-Enhanced Pragmatist" architecture with Agenti
 
 - Node.js 18+ and pnpm
 - Account on OpenRouter for API access
+- Account on Supabase for authentication
+- Account on Stripe for payment processing
 - Account on Cloudflare/Vercel for deployment
 
 ### Local Development
@@ -35,8 +46,8 @@ This project follows an "Extension-Enhanced Pragmatist" architecture with Agenti
 1. Clone the repository: `git clone https://github.com/yourusername/flight-finder-agent.git`
 2. Install dependencies: `pnpm install`
 3. Set up environment variables:
-   - Create a `.env` file in the root directory
-   - Add `OPENROUTER_API_KEY=your_api_key_here`
+   - Create a `.env` file in the root directory based on `.env.example`
+   - Add your API keys for OpenRouter, Supabase, and Stripe
 4. Start the development servers:
    - Frontend: `pnpm dev:webapp`
    - Proxy: `pnpm dev:proxy`
@@ -58,7 +69,7 @@ This project follows an "Extension-Enhanced Pragmatist" architecture with Agenti
 
 1. Push your code to GitHub
 2. Connect your repository to Vercel
-3. Configure the environment variables (OPENROUTER_API_KEY)
+3. Configure the environment variables (OPENROUTER_API_KEY, SUPABASE_URL, etc.)
 4. Deploy
 
 #### Extension Publishing
@@ -66,6 +77,23 @@ This project follows an "Extension-Enhanced Pragmatist" architecture with Agenti
 1. Zip the contents of the `extension/dist` directory
 2. Upload to the Chrome Web Store and/or Firefox Add-ons marketplace
 3. Follow the browser-specific review process guidelines
+
+## Subscription Plans
+
+Flight Finder offers several subscription tiers:
+
+- **Free**: Limited searches per month
+- **Basic**: 20 searches per month, basic flight details
+- **Premium**: 100 searches per month, detailed flight information, price alerts
+- **Enterprise**: Unlimited searches, all premium features, API access
+
+## Testing
+
+This project uses Jest and React Testing Library for unit and integration tests:
+
+1. Run all tests: `pnpm test`
+2. Run with coverage: `pnpm test:coverage`
+3. Run end-to-end tests: `pnpm test:e2e`
 
 ## Project Structure
 
