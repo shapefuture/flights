@@ -1,0 +1,61 @@
+/* Mobile-specific enhancements */
+
+/* Larger touch targets */
+@media (max-width: 768px) {
+  button, 
+  [role="button"],
+  .interactive-element {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0.75rem 1rem;
+  }
+
+  /* Improve form controls */
+  input, select, textarea {
+    font-size: 16px; /* Prevents iOS zoom on focus */
+    padding: 0.75rem;
+  }
+
+  /* Better spacing for mobile */
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  /* Mobile flight cards */
+  .flight-card-touch {
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    transition: all 0.2s ease;
+  }
+  
+  .flight-card-touch:active {
+    transform: scale(0.98);
+  }
+  
+  /* Visual indicator for swipe actions */
+  .swipe-hint-left::after,
+  .swipe-hint-right::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 8px;
+    background-color: rgba(59, 130, 246, 0.5);
+    animation: pulse 1.5s infinite;
+  }
+  
+  .swipe-hint-left::after {
+    left: 0;
+  }
+  
+  .swipe-hint-right::before {
+    right: 0;
+  }
+  
+  @keyframes pulse {
+    0% { opacity: 0.5; }
+    50% { opacity: 1; }
+    100% { opacity: 0.5; }
+  }
+}
