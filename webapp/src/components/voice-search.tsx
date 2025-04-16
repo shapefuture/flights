@@ -1,178 +1,220 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, Loader2 } from 'lucide-react';
-import { useVoiceRecognition } from '../hooks/use-voice-recognition';
+import React, { useState, useEffect, useRef } from 'react';
+import { Mic, MicOff, Info } from 'lucide-react';
 import { Button } from './ui/button';
-import { useToast } from './ui/use-toast';
-import { cn } from '../lib/utils';
+import { useVoiceRecognition } from '../hooks/use-voice-recognition';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
+import { Progress } from './ui/progress';
+import { useTranslations } from '../hooks/use-translations';
 
 interface VoiceSearchProps {
-  onTranscript: (transcript: string) => void;
-  className?: string;
-  placeholder?: string;
+  onSearch: (query: string) => void;
+  onClose: () => void;
+  open: boolean;
 }
 
-export function VoiceSearch({ onTranscript, className, placeholder = 'Speak to search for flights...' }: VoiceSearchProps) {
-  const [finalizedTranscript, setFinalizedTranscript] = useState('');
-  const [processingVoice, setProcessingVoice] = useState(false);
-  const { toast } = useToast();
+export function VoiceSearch({ onSearch, onClose, open }: VoiceSearchProps) {
+  const { t } = useTranslations();
+  const [isListening, setIsListening] = useState(false);
+  const [progressValue, setProgressValue] = useState(0);
+  const [showTips, setShowTips] = useState(false);
+  const progressIntervalRef = useRef<number | null>(null);
   const micButtonRef = useRef<HTMLButtonElement>(null);
-  
-  // Animation for voice visualization
-  const [amplitude, setAmplitude] = useState(0);
-  const animationRef = useRef<number | null>(null);
+  const MAX_LISTENING_TIME = 15000; // 15 seconds max listening time
   
   const {
     transcript,
-    isListening,
     startListening,
     stopListening,
     hasRecognitionSupport,
-    error
+    error: recognitionError
   } = useVoiceRecognition({
-    language: 'en-US',
+    language: 'en-US', // TODO: Make this dynamic based on selected language
     continuous: true,
     interimResults: true,
-    onResult: (newTranscript, isFinal) => {
-      if (isFinal) {
-        setFinalizedTranscript(newTranscript);
-        setProcessingVoice(true);
-        
-        // Stop listening when we have a finalized result
-        stopListening();
-        
-        // Process transcript
-        setTimeout(() => {
-          onTranscript(newTranscript);
-          setProcessingVoice(false);
-        }, 500);
+    onResult: (result, isFinal) => {
+      if (isFinal && result.trim()) {
+        handleVoiceResult(result);
       }
     },
-    onError: (err) => {
-      toast({
-        title: 'Voice Recognition Error',
-        description: err.message,
-        variant: 'destructive'
-      });
+    onError: (error) => {
+      console.error('Voice recognition error:', error);
+      resetListening();
+    },
+    onEnd: () => {
+      // Only automatically search if we have a transcript and weren't manually stopped
+      if (transcript.trim() && isListening) {
+        handleVoiceResult(transcript);
+      }
+      resetListening();
     }
   });
   
-  // Handle voice animation
+  // Auto stop after MAX_LISTENING_TIME
   useEffect(() => {
     if (isListening) {
-      // Start animation when listening
-      let direction = 1;
-      let currentAmplitude = 0;
-      
-      const animate = () => {
-        // Simulate voice amplitude
-        if (direction > 0) {
-          currentAmplitude += Math.random() * 2;
-          if (currentAmplitude > 50) direction = -1;
-        } else {
-          currentAmplitude -= Math.random() * 2;
-          if (currentAmplitude < 5) direction = 1;
+      const timeout = setTimeout(() => {
+        if (isListening) {
+          stopListening();
+          if (transcript.trim()) {
+            handleVoiceResult(transcript);
+          }
         }
-        
-        setAmplitude(currentAmplitude);
-        animationRef.current = requestAnimationFrame(animate);
-      };
+      }, MAX_LISTENING_TIME);
       
-      animationRef.current = requestAnimationFrame(animate);
-    } else {
-      // Stop animation when not listening
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-        animationRef.current = null;
+      return () => clearTimeout(timeout);
+    }
+  }, [isListening, transcript, stopListening]);
+  
+  // Update progress bar
+  useEffect(() => {
+    if (isListening) {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
       }
-      setAmplitude(0);
+      
+      setProgressValue(0);
+      const startTime = Date.now();
+      
+      progressIntervalRef.current = window.setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const newProgress = Math.min((elapsed / MAX_LISTENING_TIME) * 100, 100);
+        setProgressValue(newProgress);
+        
+        if (newProgress >= 100) {
+          clearInterval(progressIntervalRef.current as number);
+        }
+      }, 100);
+    } else if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
     }
     
     return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
       }
     };
   }, [isListening]);
   
-  // Show a notification if speech recognition is not supported
+  // Auto-focus the microphone button when the dialog opens
   useEffect(() => {
-    if (!hasRecognitionSupport) {
-      toast({
-        title: 'Speech Recognition Not Supported',
-        description: 'Your browser does not support speech recognition. Please try another browser or use text search.',
-        variant: 'destructive'
-      });
+    if (open) {
+      setTimeout(() => {
+        micButtonRef.current?.focus();
+      }, 100);
     }
-  }, [hasRecognitionSupport, toast]);
+  }, [open]);
   
-  // Show error message if there's an error
+  // Clean up the voice recognition when dialog closes
   useEffect(() => {
-    if (error) {
-      toast({
-        title: 'Voice Recognition Error',
-        description: error.message,
-        variant: 'destructive'
-      });
+    if (!open && isListening) {
+      stopListening();
+      resetListening();
     }
-  }, [error, toast]);
+  }, [open, isListening, stopListening]);
   
-  // Toggle listening state
   const toggleListening = () => {
     if (isListening) {
       stopListening();
+      resetListening();
     } else {
+      setIsListening(true);
       startListening();
     }
   };
   
+  const resetListening = () => {
+    setIsListening(false);
+    setProgressValue(0);
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+    }
+  };
+  
+  const handleVoiceResult = (text: string) => {
+    onSearch(text.trim());
+    resetListening();
+    onClose();
+  };
+  
+  if (!open) return null;
+  
   return (
-    <div className={cn('relative', className)}>
-      <div className="flex items-center gap-2 p-4 rounded-lg border bg-card">
-        <div className="flex-1">
-          {processingVoice ? (
-            <div className="flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-muted-foreground">Processing your search...</span>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle className="text-center">{t('voice.title')}</DialogTitle>
+          <DialogDescription className="text-center">
+            {isListening 
+              ? t('voice.listening') 
+              : t(hasRecognitionSupport ? 'voice.start' : 'voice.notSupported')}
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="flex flex-col items-center py-4 space-y-4">
+          {/* Microphone Button */}
+          <Button 
+            ref={micButtonRef}
+            variant="outline" 
+            size="icon"
+            onClick={toggleListening}
+            disabled={!hasRecognitionSupport}
+            className={`h-24 w-24 rounded-full ${isListening ? 'bg-primary text-primary-foreground animate-pulse' : ''}`}
+          >
+            {isListening ? (
+              <MicOff className="h-10 w-10" />
+            ) : (
+              <Mic className="h-10 w-10" />
+            )}
+          </Button>
+          
+          {/* Progress Bar */}
+          {isListening && (
+            <div className="w-full space-y-2">
+              <Progress value={progressValue} className="w-full" />
+              <p className="text-center text-sm text-muted-foreground">
+                {Math.round((MAX_LISTENING_TIME - (progressValue * MAX_LISTENING_TIME / 100)) / 1000)}s
+              </p>
             </div>
-          ) : isListening ? (
-            <div className="text-sm">
-              {transcript || <span className="text-muted-foreground">{placeholder}</span>}
+          )}
+          
+          {/* Transcript Display */}
+          <div className="min-h-[60px] w-full p-3 border rounded-md bg-muted/30">
+            <p className="text-center">
+              {transcript || t('voice.noSpeech')}
+            </p>
+          </div>
+          
+          {/* Error Message */}
+          {recognitionError && (
+            <div className="text-destructive text-sm">
+              {t('voice.error')}: {recognitionError.message}
             </div>
-          ) : (
-            <div className="text-sm">
-              {finalizedTranscript || <span className="text-muted-foreground">{placeholder}</span>}
+          )}
+          
+          {/* Voice Tips Toggle */}
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="text-xs flex items-center gap-1"
+            onClick={() => setShowTips(!showTips)}
+          >
+            <Info className="h-3 w-3" />
+            {showTips ? t('voice.hideTips') : t('voice.showTips')}
+          </Button>
+          
+          {/* Voice Tips Content */}
+          {showTips && (
+            <div className="text-sm text-muted-foreground border rounded-md p-3 bg-muted/30">
+              <p className="font-medium mb-1">{t('voice.exampleCommands')}:</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>{t('voice.exampleCity')}</li>
+                <li>{t('voice.exampleDate')}</li>
+                <li>{t('voice.exampleComplete')}</li>
+              </ul>
             </div>
           )}
         </div>
-        
-        {hasRecognitionSupport && (
-          <Button
-            ref={micButtonRef}
-            variant={isListening ? 'default' : 'outline'}
-            size="icon"
-            onClick={toggleListening}
-            disabled={processingVoice}
-            className={cn('relative', isListening ? 'bg-red-500 hover:bg-red-600' : '')}
-          >
-            {isListening ? (
-              <MicOff className="h-4 w-4" />
-            ) : (
-              <Mic className="h-4 w-4" />
-            )}
-            
-            {/* Voice visualization ring */}
-            {isListening && (
-              <div
-                className="absolute inset-0 rounded-full animate-ping opacity-20 bg-red-500"
-                style={{
-                  transform: `scale(${1 + amplitude / 100})`,
-                  animation: 'none'
-                }}
-              />
-            )}
-          </Button>
-        )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -134,6 +134,7 @@ export function useVoiceRecognition(options: VoiceRecognitionOptions = {}): UseV
   // Start listening
   const startListening = useCallback(() => {
     if (!recognition || !hasRecognitionSupport) {
+      // Fix: Changed from Error() to throwing a new Error
       error('Cannot start listening: Speech recognition not supported or not initialized');
       return;
     }
