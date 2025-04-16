@@ -1,72 +1,86 @@
-// Jest setup file
+// setupTests.ts - Setup for testing environment
+
+import { expect, afterEach, vi } from 'vitest';
 import '@testing-library/jest-dom';
-import 'whatwg-fetch';
-import { vi } from 'vitest';
+import { cleanup } from '@testing-library/react';
+import React from 'react';
 
-// Mock window.matchMedia
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation(query => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
-});
+// Setup global mocks
+global.React = React;
 
-// Mock Intersection Observer
-class IntersectionObserverMock {
-  observe = vi.fn();
-  disconnect = vi.fn();
-  unobserve = vi.fn();
-};
+// Create mock for fetch
+global.fetch = vi.fn();
 
-Object.defineProperty(window, 'IntersectionObserver', {
-  writable: true,
-  configurable: true,
-  value: IntersectionObserverMock
-});
+// Create mock for localStorage
+const localStorageMock = {
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
+}; 
+global.localStorage = localStorageMock as any;
 
-// Mock localStorage
-const localStorageMock = (function() {
-  let store: Record<string, string> = {};
-  return {
-    getItem: function(key: string) {
-      return store[key] || null;
-    },
-    setItem: function(key: string, value: string) {
-      store[key] = value.toString();
-    },
-    removeItem: function(key: string) {
-      delete store[key];
-    },
-    clear: function() {
-      store = {};
-    }
-  };
-})();
+// Create mock for sessionStorage
+global.sessionStorage = { ...localStorageMock } as any;
 
-Object.defineProperty(window, 'localStorage', {
-  value: localStorageMock
-});
+// Create mock for SpeechRecognition
+global.SpeechRecognition = vi.fn(() => ({
+  start: vi.fn(),
+  stop: vi.fn(),
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+}));
+global.webkitSpeechRecognition = global.SpeechRecognition;
 
-// Mock the chrome extension API
-global.chrome = {
-  runtime: {
-    sendMessage: vi.fn(),
-    onMessage: {
-      addListener: vi.fn(),
-      removeListener: vi.fn()
-    },
-    lastError: null
+// Setup afterAll for Vitest
+if (!global.afterAll) {
+  global.afterAll = (fn) => {
+    fn();
   }
-} as any;
+}
 
-// Clean up mocks automatically between tests
-beforeEach(() => {
-  vi.clearAllMocks();
+// Cleanup after each test
+afterEach(() => {
+  cleanup();
+  vi.resetAllMocks();
 });
+
+// Mock Supabase
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: vi.fn(() => ({
+    auth: {
+      signUp: vi.fn(),
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+      getSession: vi.fn(() => ({ data: { session: null }, error: null })),
+      onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
+    },
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          single: vi.fn(() => ({ data: null, error: null })),
+          maybeSingle: vi.fn(() => ({ data: null, error: null })),
+        })),
+      })),
+      insert: vi.fn(() => ({ select: vi.fn(() => ({ single: vi.fn() })) })),
+      update: vi.fn(() => ({ eq: vi.fn() })),
+      delete: vi.fn(() => ({ eq: vi.fn() })),
+    })),
+    rpc: vi.fn(() => ({ data: null, error: null })),
+  })),
+}));
+
+// Mock react-router-dom
+vi.mock('react-router-dom', () => ({
+  useNavigate: vi.fn(() => vi.fn()),
+  useLocation: vi.fn(() => ({ pathname: '/', search: '', hash: '', state: null })),
+  useParams: vi.fn(() => ({})),
+  Link: ({ children, to, ...props }) => React.createElement('a', { href: to, ...props }, children),
+  Outlet: ({ children }) => React.createElement('div', { 'data-testid': 'outlet' }, children),
+  Navigate: ({ to }) => React.createElement('div', { 'data-testid': 'navigate', to }, null),
+  BrowserRouter: ({ children }) => React.createElement('div', { 'data-testid': 'browser-router' }, children),
+  Routes: ({ children }) => React.createElement('div', { 'data-testid': 'routes' }, children),
+  Route: () => null,
+}));
+
+export {};

@@ -1,1 +1,53 @@
-name: Fix Missing
+name: Fix Missing Lock Files
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 0'  # Run weekly on Sundays at midnight
+
+jobs:
+  fix-lock-files:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Use Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18.x
+    
+    - name: Install pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: 7
+        run_install: false
+    
+    - name: Check and update lock files
+      run: |
+        # Verify all workspaces have package.json files
+        if [ ! -f "webapp/package.json" ]; then
+          echo "Error: webapp/package.json is missing"
+          exit 1
+        fi
+        
+        if [ ! -f "extension/package.json" ]; then
+          echo "Error: extension/package.json is missing"
+          exit 1
+        fi
+        
+        if [ ! -f "proxy/package.json" ]; then
+          echo "Error: proxy/package.json is missing"
+          exit 1
+        fi
+        
+        # Generate/update lock file
+        pnpm install
+
+    - name: Commit and push if changed
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add pnpm-lock.yaml
+        git commit -m "Update pnpm-lock.yaml file" || echo "No changes to commit"
+        git push

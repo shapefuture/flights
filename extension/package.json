@@ -1,24 +1,31 @@
 {
   "name": "flight-finder-extension",
-  "private": true,
   "version": "0.1.0",
-  "type": "module",
+  "private": true,
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "lint": "eslint src --ext ts,tsx",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
   },
-  "dependencies": {
-    "protobufjs": "^7.2.4"
-  },
   "devDependencies": {
-    "@types/chrome": "^0.0.243",
-    "@vitest/coverage-v8": "^0.34.3",
-    "typescript": "^5.0.2",
-    "vite": "^4.4.5",
-    "vitest": "^0.34.3"
+    "@types/chrome": "^0.0.246",
+    "@types/node": "^20.5.9",
+    "@typescript-eslint/eslint-plugin": "^6.5.0",
+    "@typescript-eslint/parser": "^6.5.0",
+    "@vitest/coverage-v8": "^0.34.4",
+    "eslint": "^8.48.0",
+    "jsdom": "^22.1.0",
+    "prettier": "^3.0.3",
+    "typescript": "^5.0.4",
+    "vite": "^4.4.9",
+    "vitest": "^0.34.4"
+  },
+  "dependencies": {
+    "protobufjs": "^7.2.5"
   }
 }

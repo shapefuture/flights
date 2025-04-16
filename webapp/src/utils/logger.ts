@@ -1,162 +1,61 @@
-// Enhanced logger with better formatting and error tracking
+/**
+ * Logger utility for consistent logging across the application
+ */
 
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
-
-interface LogOptions {
-  tags?: string[];
-  user?: string;
-  context?: Record<string, any>;
-}
-
-// Get configured log level from environment
-const ENV_LOG_LEVEL = import.meta.env.VITE_LOG_LEVEL || 'info';
-
-// Map log levels to numeric values for comparison
-const LOG_LEVEL_MAP: Record<LogLevel, number> = {
-  debug: 0,
-  info: 1,
-  warn: 2,
-  error: 3
+// Named exports for logger functions
+export const debug = (message: string, ...args: any[]) => {
+  if (process.env.NODE_ENV !== 'production') {
+    console.debug(`[DEBUG] ${message}`, ...args);
+  }
 };
 
-const CURRENT_LOG_LEVEL = LOG_LEVEL_MAP[ENV_LOG_LEVEL as LogLevel] || LOG_LEVEL_MAP.info;
+export const info = (message: string, ...args: any[]) => {
+  console.info(`[INFO] ${message}`, ...args);
+};
 
-// Format message with timestamp, log level and other metadata
-function formatLogMessage(level: LogLevel, message: string, options?: LogOptions): string {
-  const timestamp = new Date().toISOString();
-  const tagsStr = options?.tags ? `[${options.tags.join(',')}]` : '';
-  const userStr = options?.user ? `[User:${options.user}]` : '';
-  
-  return `${timestamp} [${level.toUpperCase()}] ${tagsStr} ${userStr} ${message}`;
-}
+export const error = (message: string, ...args: any[]) => {
+  console.error(`[ERROR] ${message}`, ...args);
+};
 
-// Determine if message should be logged based on configured level
-function shouldLog(level: LogLevel): boolean {
-  return LOG_LEVEL_MAP[level] >= CURRENT_LOG_LEVEL;
-}
+export const warn = (message: string, ...args: any[]) => {
+  console.warn(`[WARN] ${message}`, ...args);
+};
 
-// Send error to an error monitoring service (mock implementation)
-function reportErrorToMonitoring(error: Error | string, context?: Record<string, any>): void {
-  // This would integrate with an actual error monitoring service like Sentry
-  if (import.meta.env.PROD) {
-    console.log('[ERROR_MONITORING]', { error, context });
-    
-    // Example Sentry integration:
-    // Sentry.captureException(error, {
-    //   extra: context
-    // });
+// Additional logging methods for API interactions
+export const logApiRequest = (endpoint: string, params: any) => {
+  if (process.env.NODE_ENV !== 'production') {
+    console.debug(`[API REQUEST] ${endpoint}`, params);
   }
-}
+};
 
-// Debug level logging
-export function debug(message: string, ...args: any[]): void {
-  if (!shouldLog('debug')) return;
-  
-  console.debug(formatLogMessage('debug', message), ...args);
-}
-
-// Info level logging
-export function info(message: string, ...args: any[]): void {
-  if (!shouldLog('info')) return;
-  
-  console.info(formatLogMessage('info', message), ...args);
-}
-
-// Warning level logging
-export function warn(message: string, ...args: any[]): void {
-  if (!shouldLog('warn')) return;
-  
-  console.warn(formatLogMessage('warn', message), ...args);
-}
-
-// Error level logging
-export function error(message: string, err?: any, options?: LogOptions): void {
-  if (!shouldLog('error')) return;
-  
-  console.error(formatLogMessage('error', message), err);
-  
-  // Report errors to monitoring service
-  if (err instanceof Error) {
-    reportErrorToMonitoring(err, { message, ...options?.context });
-  } else if (err) {
-    reportErrorToMonitoring(`${message}: ${JSON.stringify(err)}`, options?.context);
-  } else {
-    reportErrorToMonitoring(message, options?.context);
+export const logApiResponse = (endpoint: string, response: any, status: number = 200) => {
+  if (process.env.NODE_ENV !== 'production') {
+    console.debug(`[API RESPONSE] ${endpoint} (${status})`, response);
   }
-}
+};
 
-// Log API requests
-export function logApiRequest(
-  endpoint: string, 
-  method: string, 
-  requestData?: any,
-  options?: LogOptions
-): void {
-  if (!shouldLog('debug')) return;
-  
-  const message = `API Request: ${method} ${endpoint}`;
-  console.debug(
-    formatLogMessage('debug', message, { ...options, tags: [...(options?.tags || []), 'api'] }),
-    { requestData }
-  );
-}
+export const logUserActivity = (activity: string, details?: any) => {
+  console.info(`[USER ACTIVITY] ${activity}`, details || '');
+};
 
-// Log API responses
-export function logApiResponse(
-  endpoint: string,
-  method: string,
-  status: number,
-  responseData?: any,
-  options?: LogOptions
-): void {
-  // Choose log level based on response status
-  const level: LogLevel = status >= 400 ? 'error' : 'debug';
-  
-  if (!shouldLog(level)) return;
-  
-  const message = `API Response: ${method} ${endpoint} (${status})`;
-  console[level](
-    formatLogMessage(level, message, { ...options, tags: [...(options?.tags || []), 'api'] }),
-    { responseData }
-  );
-  
-  // If error response, report to monitoring
-  if (status >= 400) {
-    reportErrorToMonitoring(
-      `API Error: ${method} ${endpoint} returned ${status}`,
-      { status, responseData, ...options?.context }
-    );
-  }
-}
+// Factory function for creating contextual loggers
+export const createLogger = (context: string) => ({
+  debug: (message: string, ...args: any[]) => debug(`[${context}] ${message}`, ...args),
+  info: (message: string, ...args: any[]) => info(`[${context}] ${message}`, ...args),
+  error: (message: string, ...args: any[]) => error(`[${context}] ${message}`, ...args),
+  warn: (message: string, ...args: any[]) => warn(`[${context}] ${message}`, ...args),
+});
 
-// Log user activities
-export function logUserActivity(
-  action: string,
-  userId: string,
-  details?: any
-): void {
-  if (!shouldLog('info')) return;
-  
-  const message = `User Activity: ${action}`;
-  console.info(
-    formatLogMessage('info', message, { user: userId, tags: ['user', 'activity'] }),
-    details
-  );
-}
+// Default export for backward compatibility
+const logger = {
+  debug,
+  info,
+  error,
+  warn,
+  logApiRequest,
+  logApiResponse,
+  logUserActivity,
+  createLogger
+};
 
-// Create a namespaced logger
-export function createLogger(namespace: string) {
-  return {
-    debug: (message: string, ...args: any[]) => debug(`[${namespace}] ${message}`, ...args),
-    info: (message: string, ...args: any[]) => info(`[${namespace}] ${message}`, ...args),
-    warn: (message: string, ...args: any[]) => warn(`[${namespace}] ${message}`, ...args),
-    error: (message: string, err?: any, options?: LogOptions) => 
-      error(`[${namespace}] ${message}`, err, options),
-    logApiRequest: (endpoint: string, method: string, requestData?: any, options?: LogOptions) =>
-      logApiRequest(endpoint, method, requestData, { ...options, tags: [...(options?.tags || []), namespace] }),
-    logApiResponse: (endpoint: string, method: string, status: number, responseData?: any, options?: LogOptions) =>
-      logApiResponse(endpoint, method, status, responseData, { ...options, tags: [...(options?.tags || []), namespace] }),
-    logUserActivity: (action: string, userId: string, details?: any) =>
-      logUserActivity(`[${namespace}] ${action}`, userId, details)
-  };
-}
+export default logger;
