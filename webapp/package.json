@@ -49,7 +49,7 @@
   "scripts": {
     "dev": "vite",
     "start": "vite",
-    "build": "tsc --noEmit false --skipLibCheck && vite build",
+    "build": "tsc --skipLibCheck && vite build",
     "test": "vitest run --environment jsdom",
     "test:coverage": "vitest run --coverage --environment jsdom",
     "eject": "vite eject"
