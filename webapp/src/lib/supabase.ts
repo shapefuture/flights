@@ -1,9 +1,29 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://example.supabase.co';
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'dummy-key';
+// Create a single supabase client for interacting with your database
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-export default supabase;
+// Named export for incrementQueriesUsed function
+export const incrementQueriesUsed = async (userId: string): Promise<void> => {
+  if (!userId) return;
+  
+  try {
+    const { error } = await supabase.rpc('increment_queries_used', { user_id: userId });
+    if (error) {
+      console.error('Error incrementing queries used:', error);
+    }
+  } catch (err) {
+    console.error('Failed to increment queries used:', err);
+  }
+};
+
+// Default export for backward compatibility
+const supabaseClient = {
+  client: supabase,
+  incrementQueriesUsed
+};
+
+export default supabaseClient;
