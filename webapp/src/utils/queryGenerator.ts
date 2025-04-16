@@ -1,6 +1,26 @@
-import { addDays, format, parse, isValid, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import logger from './logger';
 
-// Type for flight search queries
+/**
+ * Interface for the parameters passed to the query generator
+ */
+export interface QueryParameters {
+  origins?: string | string[];
+  destinations?: string | string[];
+  departureDateRange?: string;
+  returnDateRange?: string | null;
+  numAdults?: number;
+  numChildren?: number;
+  numInfants?: number;
+  cabinClass?: string;
+  maxPrice?: number;
+  stayDuration?: number;
+  departureDateFlexibility?: number;
+  returnDateFlexibility?: number;
+}
+
+/**
+ * Flight query structure for the flight search
+ */
 export interface FlightQuery {
   origin: string;
   dest: string;
@@ -10,456 +30,245 @@ export interface FlightQuery {
   numChildren?: number;
   numInfants?: number;
   cabinClass?: string;
-  // Enhanced preferences
-  maxPrice?: number;
-  maxStops?: number;
-  preferredAirlines?: string[];
-  excludedAirlines?: string[];
-  luggagePreference?: LuggagePreference;
-  seatPreference?: SeatPreference;
-  mealPreference?: string;
-  minLayoverTime?: number; // In minutes
-  maxLayoverTime?: number; // In minutes
-  preferredAirports?: string[];
-  excludedAirports?: string[];
-  timePreferences?: TimePreferences;
-  flexibleDates?: boolean;
-  priorityBoarding?: boolean;
-  refundable?: boolean;
-  directFlightsOnly?: boolean;
 }
 
-// Types for luggage preferences
-export interface LuggagePreference {
-  checkedBags?: number;
-  carryOn?: boolean;
-  personalItem?: boolean;
-  extraWeight?: boolean; // For travelers needing extra baggage weight
-  sportEquipment?: string; // For special equipment like skis, golf clubs, etc.
-}
-
-// Types for seat preferences
-export interface SeatPreference {
-  position?: 'window' | 'aisle' | 'middle';
-  section?: 'front' | 'middle' | 'back' | 'emergency' | 'bulkhead';
-  extraLegroom?: boolean;
-  prefersTogether?: boolean; // For group travel, prefer seats together
-}
-
-// Types for time preferences
-export interface TimePreferences {
-  departureTimeRange?: [number, number]; // 24 hour format, e.g. [8, 12] for 8 AM to 12 PM
-  arrivalTimeRange?: [number, number];
-  returnDepartureTimeRange?: [number, number];
-  returnArrivalTimeRange?: [number, number];
-  avoidOvernight?: boolean;
-  preferWeekday?: boolean;
-  preferWeekend?: boolean;
-}
-
-// Helper function to format date to YYYY-MM-DD
-function formatDate(date: Date): string {
-  return format(date, 'yyyy-MM-dd');
-}
-
-// Helper function to parse relative date references
-function parseRelativeDateRange(dateRange: string): { startDate: Date, endDate: Date } {
-  const today = new Date();
-  const thisWeekStart = startOfWeek(today, { weekStartsOn: 1 }); // Monday as start of week
-  const thisWeekEnd = endOfWeek(today, { weekStartsOn: 1 });
-  const thisMonthStart = startOfMonth(today);
-  const thisMonthEnd = endOfMonth(today);
+/**
+ * Error class for query generator errors
+ */
+export class QueryGeneratorError extends Error {
+  parameter?: string;
   
-  switch (dateRange.toLowerCase()) {
-    case 'today':
-      return { startDate: today, endDate: today };
-    
-    case 'tomorrow':
-      const tomorrow = addDays(today, 1);
-      return { startDate: tomorrow, endDate: tomorrow };
-    
-    case 'this-week':
-      return { startDate: thisWeekStart, endDate: thisWeekEnd };
-    
-    case 'this-weekend':
-      const thisWeekendStart = addDays(thisWeekEnd, -2); // Friday
-      return { startDate: thisWeekendStart, endDate: thisWeekEnd };
-    
-    case 'next-week':
-      return { 
-        startDate: addDays(thisWeekStart, 7), 
-        endDate: addDays(thisWeekEnd, 7) 
-      };
-    
-    case 'next-weekend':
-      const nextWeekend = addDays(thisWeekEnd, 7);
-      const nextWeekendStart = addDays(nextWeekend, -2); // Friday
-      return { startDate: nextWeekendStart, endDate: nextWeekend };
-    
-    case 'following-weekend':
-      const followingWeekend = addDays(thisWeekEnd, 14);
-      const followingWeekendStart = addDays(followingWeekend, -2); // Friday
-      return { startDate: followingWeekendStart, endDate: followingWeekend };
-    
-    case 'this-month':
-      return { startDate: thisMonthStart, endDate: thisMonthEnd };
-    
-    case 'next-month':
-      const nextMonthStart = addDays(thisMonthEnd, 1);
-      const nextMonthEnd = endOfMonth(nextMonthStart);
-      return { startDate: nextMonthStart, endDate: nextMonthEnd };
-    
-    default:
-      // If it's a specific date in YYYY-MM-DD format
-      const specificDate = parse(dateRange, 'yyyy-MM-dd', new Date());
-      if (isValid(specificDate)) {
-        return { startDate: specificDate, endDate: specificDate };
-      }
-      
-      // Default to today if can't parse
-      return { startDate: today, endDate: today };
+  constructor(message: string, parameter?: string) {
+    super(message);
+    this.name = 'QueryGeneratorError';
+    this.parameter = parameter;
   }
 }
 
-// Helper function to add flexibility around a date
-function addFlexibility(date: Date, flexibility: number): Date[] {
-  const dates: Date[] = [date];
-  
-  for (let i = 1; i <= flexibility; i++) {
-    dates.push(addDays(date, i));
-    dates.push(addDays(date, -i));
+/**
+ * Validate the parameters to ensure they are valid
+ * @param params Parameters to validate
+ */
+function validateParameters(params: QueryParameters): void {
+  // Check that we have both origins and destinations
+  if (!params.origins) {
+    throw new QueryGeneratorError('No origin specified', 'origins');
   }
   
-  // Sort dates chronologically
-  return dates.sort((a, b) => a.getTime() - b.getTime());
+  if (!params.destinations) {
+    throw new QueryGeneratorError('No destination specified', 'destinations');
+  }
+  
+  // Check that we have a departure date range
+  if (!params.departureDateRange) {
+    throw new QueryGeneratorError('No departure date range specified', 'departureDateRange');
+  }
+  
+  // Validate numbers
+  if (params.numAdults !== undefined && (isNaN(params.numAdults) || params.numAdults < 1)) {
+    throw new QueryGeneratorError('Invalid number of adults', 'numAdults');
+  }
+  
+  if (params.numChildren !== undefined && (isNaN(params.numChildren) || params.numChildren < 0)) {
+    throw new QueryGeneratorError('Invalid number of children', 'numChildren');
+  }
+  
+  if (params.numInfants !== undefined && (isNaN(params.numInfants) || params.numInfants < 0)) {
+    throw new QueryGeneratorError('Invalid number of infants', 'numInfants');
+  }
+  
+  // Validate cabin class
+  if (params.cabinClass && !['economy', 'premium_economy', 'business', 'first'].includes(params.cabinClass.toLowerCase())) {
+    throw new QueryGeneratorError('Invalid cabin class', 'cabinClass');
+  }
 }
 
-// Helper function to parse natural language preferences
-export function parsePreferences(parameters: any): Partial<FlightQuery> {
-  const preferences: Partial<FlightQuery> = {};
+/**
+ * Parse date range strings into actual date strings
+ * @param dateRange Date range string like "next-weekend", "YYYY-MM-DD", etc.
+ * @param isReturn Whether this is for a return date
+ * @returns Array of date strings in YYYY-MM-DD format
+ */
+function parseDateRange(dateRange: string, isReturn: boolean = false): string[] {
+  logger.debug(`Parsing date range: ${dateRange} (isReturn: ${isReturn})`);
   
-  // Parse cabin class with alternate forms
-  if (parameters.cabinClass) {
-    preferences.cabinClass = mapCabinClass(parameters.cabinClass);
-  }
-  
-  // Parse price constraints
-  if (parameters.maxPrice && typeof parameters.maxPrice === 'number') {
-    preferences.maxPrice = parameters.maxPrice;
-  }
-  
-  // Parse stop preferences
-  if (parameters.directFlightsOnly === true || 
-      parameters.nonstop === true || 
-      parameters.direct === true) {
-    preferences.directFlightsOnly = true;
-    preferences.maxStops = 0;
-  } else if (parameters.maxStops !== undefined) {
-    preferences.maxStops = parameters.maxStops;
-  }
-  
-  // Parse airline preferences
-  if (parameters.preferredAirlines) {
-    preferences.preferredAirlines = Array.isArray(parameters.preferredAirlines) 
-      ? parameters.preferredAirlines 
-      : [parameters.preferredAirlines];
-  }
-  
-  if (parameters.excludedAirlines) {
-    preferences.excludedAirlines = Array.isArray(parameters.excludedAirlines) 
-      ? parameters.excludedAirlines 
-      : [parameters.excludedAirlines];
-  }
-  
-  // Parse luggage preferences
-  const luggagePreference: LuggagePreference = {};
-  
-  if (parameters.checkedBags !== undefined) {
-    luggagePreference.checkedBags = parameters.checkedBags;
-  }
-  
-  if (parameters.carryOn !== undefined) {
-    luggagePreference.carryOn = parameters.carryOn;
-  }
-  
-  if (parameters.personalItem !== undefined) {
-    luggagePreference.personalItem = parameters.personalItem;
-  }
-  
-  if (parameters.extraWeight !== undefined) {
-    luggagePreference.extraWeight = parameters.extraWeight;
-  }
-  
-  if (parameters.sportEquipment) {
-    luggagePreference.sportEquipment = parameters.sportEquipment;
-  }
-  
-  // Only set if we have any luggage preferences
-  if (Object.keys(luggagePreference).length > 0) {
-    preferences.luggagePreference = luggagePreference;
-  }
-  
-  // Parse seat preferences
-  const seatPreference: SeatPreference = {};
-  
-  if (parameters.seatPosition) {
-    seatPreference.position = parameters.seatPosition;
-  }
-  
-  if (parameters.seatSection) {
-    seatPreference.section = parameters.seatSection;
-  }
-  
-  if (parameters.extraLegroom !== undefined) {
-    seatPreference.extraLegroom = parameters.extraLegroom;
-  }
-  
-  if (parameters.seatsTogether !== undefined) {
-    seatPreference.prefersTogether = parameters.seatsTogether;
-  }
-  
-  // Only set if we have any seat preferences
-  if (Object.keys(seatPreference).length > 0) {
-    preferences.seatPreference = seatPreference;
-  }
-  
-  // Parse time preferences
-  const timePreferences: TimePreferences = {};
-  
-  if (parameters.departureTimeRange) {
-    timePreferences.departureTimeRange = parameters.departureTimeRange;
-  }
-  
-  if (parameters.arrivalTimeRange) {
-    timePreferences.arrivalTimeRange = parameters.arrivalTimeRange;
-  }
-  
-  if (parameters.returnDepartureTimeRange) {
-    timePreferences.returnDepartureTimeRange = parameters.returnDepartureTimeRange;
-  }
-  
-  if (parameters.returnArrivalTimeRange) {
-    timePreferences.returnArrivalTimeRange = parameters.returnArrivalTimeRange;
-  }
-  
-  if (parameters.avoidOvernight !== undefined) {
-    timePreferences.avoidOvernight = parameters.avoidOvernight;
-  }
-  
-  if (parameters.preferWeekday !== undefined) {
-    timePreferences.preferWeekday = parameters.preferWeekday;
-  }
-  
-  if (parameters.preferWeekend !== undefined) {
-    timePreferences.preferWeekend = parameters.preferWeekend;
-  }
-  
-  // Only set if we have any time preferences
-  if (Object.keys(timePreferences).length > 0) {
-    preferences.timePreferences = timePreferences;
-  }
-  
-  // Parse other preferences
-  if (parameters.mealPreference) {
-    preferences.mealPreference = parameters.mealPreference;
-  }
-  
-  if (parameters.minLayoverTime) {
-    preferences.minLayoverTime = parameters.minLayoverTime;
-  }
-  
-  if (parameters.maxLayoverTime) {
-    preferences.maxLayoverTime = parameters.maxLayoverTime;
-  }
-  
-  if (parameters.preferredAirports) {
-    preferences.preferredAirports = Array.isArray(parameters.preferredAirports) 
-      ? parameters.preferredAirports 
-      : [parameters.preferredAirports];
-  }
-  
-  if (parameters.excludedAirports) {
-    preferences.excludedAirports = Array.isArray(parameters.excludedAirports) 
-      ? parameters.excludedAirports 
-      : [parameters.excludedAirports];
-  }
-  
-  if (parameters.flexibleDates !== undefined) {
-    preferences.flexibleDates = parameters.flexibleDates;
-  }
-  
-  if (parameters.priorityBoarding !== undefined) {
-    preferences.priorityBoarding = parameters.priorityBoarding;
-  }
-  
-  if (parameters.refundable !== undefined) {
-    preferences.refundable = parameters.refundable;
-  }
-  
-  return preferences;
-}
-
-// Helper function to map cabin class strings to standardized values
-function mapCabinClass(cabinClass: string): string {
-  const cabinClassLower = cabinClass.toLowerCase();
-  
-  if (['economy', 'coach', 'standard', 'basic'].includes(cabinClassLower)) {
-    return 'economy';
-  }
-  
-  if (['premium economy', 'premium', 'economy plus'].includes(cabinClassLower)) {
-    return 'premium_economy';
-  }
-  
-  if (['business', 'business class'].includes(cabinClassLower)) {
-    return 'business';
-  }
-  
-  if (['first', 'first class'].includes(cabinClassLower)) {
-    return 'first';
-  }
-  
-  return cabinClassLower;
-}
-
-// Main function to generate all flight queries based on parameters
-export function generateQueries(parameters: any): FlightQuery[] {
-  const queries: FlightQuery[] = [];
-  
-  // Handle origin(s)
-  const origins = parameters.origins || [parameters.origin || 'JFK'];
-  
-  // Handle destination(s)
-  const destinations = parameters.destinations || [parameters.destination || 'LHR'];
-  
-  // Handle departure date(s)
-  let departureDates: Date[] = [];
-  
-  if (parameters.departureDate) {
-    // Single specific date
-    const parsedDate = parse(parameters.departureDate, 'yyyy-MM-dd', new Date());
-    if (isValid(parsedDate)) {
-      departureDates = [parsedDate];
-    }
-  } else if (parameters.departureDateRange) {
-    // Date range (like "next-weekend")
-    const { startDate, endDate } = parseRelativeDateRange(parameters.departureDateRange);
-    
-    // Generate all dates in the range
-    let currentDate = startDate;
-    while (currentDate <= endDate) {
-      departureDates.push(new Date(currentDate));
-      currentDate = addDays(currentDate, 1);
-    }
-  } else {
-    // Default to today
-    departureDates = [new Date()];
-  }
-  
-  // Add departure date flexibility if specified
-  if (parameters.departureDateFlexibility && typeof parameters.departureDateFlexibility === 'number') {
-    const flexibility = parameters.departureDateFlexibility;
-    const flexibleDates: Date[] = [];
-    
-    for (const date of departureDates) {
-      flexibleDates.push(...addFlexibility(date, flexibility));
+  try {
+    // Handle exact dates (YYYY-MM-DD)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateRange)) {
+      return [dateRange];
     }
     
-    // Deduplicate dates
-    departureDates = Array.from(new Set(flexibleDates.map(d => d.getTime())))
-      .map(time => new Date(time))
-      .sort((a, b) => a.getTime() - b.getTime());
-  }
-  
-  // Handle return date(s) for round trips
-  let returnDates: (Date | null)[] = [null]; // Default to one-way
-  
-  if (parameters.returnDate) {
-    // Single specific date
-    const parsedDate = parse(parameters.returnDate, 'yyyy-MM-dd', new Date());
-    if (isValid(parsedDate)) {
-      returnDates = [parsedDate];
-    }
-  } else if (parameters.returnDateRange) {
-    // Date range (like "following-weekend")
-    const { startDate, endDate } = parseRelativeDateRange(parameters.returnDateRange);
-    
-    // Generate all dates in the range
-    let currentDate = startDate;
-    returnDates = [];
-    while (currentDate <= endDate) {
-      returnDates.push(new Date(currentDate));
-      currentDate = addDays(currentDate, 1);
-    }
-  } else if (parameters.stayDuration) {
-    // Calculate return dates based on stay duration
-    // Will be applied per departure date below
-    returnDates = []; // Empty the array, will populate based on departures
-  }
-  
-  // Add return date flexibility if specified
-  if (
-    parameters.returnDateFlexibility && 
-    typeof parameters.returnDateFlexibility === 'number' &&
-    returnDates[0] !== null // Only if return dates are specified
-  ) {
-    const flexibility = parameters.returnDateFlexibility;
-    const flexibleDates: Date[] = [];
-    
-    for (const date of returnDates as Date[]) {
-      flexibleDates.push(...addFlexibility(date, flexibility));
+    // Handle one-way flights for return dates
+    if (isReturn && (dateRange === 'one-way' || dateRange === null || dateRange === undefined)) {
+      return [];
     }
     
-    // Deduplicate dates
-    returnDates = Array.from(new Set(flexibleDates.map(d => d.getTime())))
-      .map(time => new Date(time))
-      .sort((a, b) => a.getTime() - b.getTime());
+    const today = new Date();
+    let dates: Date[] = [];
+    
+    // Handle natural language date ranges
+    switch (dateRange.toLowerCase()) {
+      case 'next-weekend':
+        // Find the next Saturday
+        const nextSaturday = new Date(today);
+        nextSaturday.setDate(today.getDate() + (6 - today.getDay() + 7) % 7);
+        const nextSunday = new Date(nextSaturday);
+        nextSunday.setDate(nextSaturday.getDate() + 1);
+        dates = [nextSaturday, nextSunday];
+        break;
+        
+      case 'following-weekend':
+        // Find the Saturday after next
+        const followingSaturday = new Date(today);
+        followingSaturday.setDate(today.getDate() + (6 - today.getDay() + 14) % 14);
+        const followingSunday = new Date(followingSaturday);
+        followingSunday.setDate(followingSaturday.getDate() + 1);
+        dates = [followingSaturday, followingSunday];
+        break;
+        
+      case 'next-week':
+        // Start from tomorrow and go for 7 days
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+        dates = Array.from({ length: 7 }, (_, i) => {
+          const date = new Date(tomorrow);
+          date.setDate(tomorrow.getDate() + i);
+          return date;
+        });
+        break;
+        
+      case 'next-month':
+        // Start from the 1st of next month
+        const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+        dates = [nextMonth];
+        break;
+        
+      case 'one-week-later':
+        // If this is for a return, get dates 7 days after departure
+        if (isReturn) {
+          // Note: We should have the departure dates at this point, but this is a simplified version
+          const oneWeekLater = new Date(today);
+          oneWeekLater.setDate(today.getDate() + 7);
+          dates = [oneWeekLater];
+        } else {
+          throw new QueryGeneratorError('one-week-later is only valid for return dates', 'returnDateRange');
+        }
+        break;
+        
+      default:
+        // Default to today (but this should be handled more gracefully in a real app)
+        logger.warn(`Unknown date range: ${dateRange}, defaulting to today`);
+        dates = [today];
+    }
+    
+    // Convert dates to YYYY-MM-DD format
+    return dates.map(date => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    });
+  } catch (error) {
+    if (error instanceof QueryGeneratorError) {
+      throw error;
+    }
+    logger.error('Error parsing date range:', error);
+    throw new QueryGeneratorError(
+      `Failed to parse date range "${dateRange}": ${error instanceof Error ? error.message : 'Unknown error'}`,
+      isReturn ? 'returnDateRange' : 'departureDateRange'
+    );
   }
+}
+
+/**
+ * Generate flight queries from natural language parameters
+ * @param params Parameters to generate queries from
+ * @returns Array of flight queries
+ */
+export function generateQueries(params: QueryParameters): FlightQuery[] {
+  logger.debug('Generating queries from parameters:', params);
   
-  // Parse all preference parameters
-  const preferences = parsePreferences(parameters);
-  
-  // Generate all combinations
-  for (const origin of origins) {
-    for (const destination of destinations) {
-      for (const departureDate of departureDates) {
-        // For stay duration logic
-        if (parameters.stayDuration && typeof parameters.stayDuration === 'number') {
-          const returnDate = addDays(departureDate, parameters.stayDuration);
-          queries.push({
-            origin,
-            dest: destination,
-            depDate: formatDate(departureDate),
-            retDate: formatDate(returnDate),
-            numAdults: parameters.numAdults || 1,
-            numChildren: parameters.numChildren || 0,
-            numInfants: parameters.numInfants || 0,
-            cabinClass: parameters.cabinClass || 'economy',
-            ...preferences
-          });
+  try {
+    // Validate parameters
+    validateParameters(params);
+    
+    // Normalize parameters
+    const origins = Array.isArray(params.origins) ? params.origins : [params.origins!];
+    const destinations = Array.isArray(params.destinations) ? params.destinations : [params.destinations!];
+    
+    // Parse date ranges
+    const departureDates = parseDateRange(params.departureDateRange!);
+    const returnDates = params.returnDateRange 
+      ? parseDateRange(params.returnDateRange, true)
+      : [];
+    
+    logger.debug('Parsed dates:', { departureDates, returnDates });
+    
+    // Generate all combinations
+    const queries: FlightQuery[] = [];
+    
+    for (const origin of origins) {
+      for (const dest of destinations) {
+        // Skip if origin and destination are the same
+        if (origin === dest) {
+          logger.warn(`Skipping query with same origin and destination: ${origin}`);
           continue;
         }
         
-        // For all other return date logic
-        for (const returnDate of returnDates) {
-          // Skip invalid combinations (return before departure)
-          if (returnDate !== null && returnDate <= departureDate) continue;
-          
-          queries.push({
-            origin,
-            dest: destination,
-            depDate: formatDate(departureDate),
-            retDate: returnDate ? formatDate(returnDate) : undefined,
-            numAdults: parameters.numAdults || 1,
-            numChildren: parameters.numChildren || 0,
-            numInfants: parameters.numInfants || 0,
-            cabinClass: parameters.cabinClass || 'economy',
-            ...preferences
-          });
+        for (const depDate of departureDates) {
+          // For one-way flights
+          if (returnDates.length === 0) {
+            queries.push({
+              origin,
+              dest,
+              depDate,
+              numAdults: params.numAdults || 1,
+              numChildren: params.numChildren,
+              numInfants: params.numInfants,
+              cabinClass: params.cabinClass
+            });
+          } 
+          // For round-trip flights
+          else {
+            for (const retDate of returnDates) {
+              // Skip if return date is before or same as departure date
+              if (retDate <= depDate) {
+                logger.warn(`Skipping query with return date (${retDate}) before departure date (${depDate})`);
+                continue;
+              }
+              
+              queries.push({
+                origin,
+                dest,
+                depDate,
+                retDate,
+                numAdults: params.numAdults || 1,
+                numChildren: params.numChildren,
+                numInfants: params.numInfants,
+                cabinClass: params.cabinClass
+              });
+            }
+          }
         }
       }
     }
+    
+    // Check if we generated any queries
+    if (queries.length === 0) {
+      throw new QueryGeneratorError('No valid queries could be generated from the parameters');
+    }
+    
+    logger.debug(`Generated ${queries.length} queries`);
+    return queries;
+    
+  } catch (error) {
+    if (error instanceof QueryGeneratorError) {
+      logger.error(`Query Generator Error (${error.parameter}):`, error.message);
+    } else {
+      logger.error('Unexpected error generating queries:', error);
+    }
+    
+    // In a real app, we might want to return a partial result or default queries instead of throwing
+    throw error;
   }
-  
-  return queries;
 }

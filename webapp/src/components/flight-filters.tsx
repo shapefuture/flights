@@ -1,12 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Slider } from './ui/slider';
 import { Label } from './ui/label';
 import { Checkbox } from './ui/checkbox';
 import { Button } from './ui/button';
-import { Filter, RotateCcw, ChevronDown, ChevronUp, Briefcase, Wifi, Coffee, Monitor, CreditCard, Calendar } from 'lucide-react';
-import { RadioGroup, RadioGroupItem } from './ui/radio-group';
-import { Separator } from './ui/separator';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
+import { Filter, RotateCcw, AlertTriangle } from 'lucide-react';
+import logger from '../utils/logger';
 
 interface FlightFiltersProps {
   results: any[];
@@ -16,20 +14,6 @@ interface FlightFiltersProps {
     airlines: string[];
     departureTime: number[];
     arrivalTime: number[];
-    luggageFilters: {
-      minCheckedBags: number;
-      requiresCarryOn: boolean;
-      requiresPersonalItem: boolean;
-    };
-    amenityFilters: {
-      requiresWifi: boolean;
-      requiresPower: boolean;
-      requiresEntertainment: boolean;
-      mealTypes: string[];
-      minLegroom: 'any' | 'standard' | 'extra' | 'premium';
-    };
-    cancellationPolicy: 'any' | 'refundable' | 'non-refundable' | 'partial';
-    fareTypes: string[];
   };
   setFilters: React.Dispatch<React.SetStateAction<{
     maxPrice: number;
@@ -37,188 +21,150 @@ interface FlightFiltersProps {
     airlines: string[];
     departureTime: number[];
     arrivalTime: number[];
-    luggageFilters: {
-      minCheckedBags: number;
-      requiresCarryOn: boolean;
-      requiresPersonalItem: boolean;
-    };
-    amenityFilters: {
-      requiresWifi: boolean;
-      requiresPower: boolean;
-      requiresEntertainment: boolean;
-      mealTypes: string[];
-      minLegroom: 'any' | 'standard' | 'extra' | 'premium';
-    };
-    cancellationPolicy: 'any' | 'refundable' | 'non-refundable' | 'partial';
-    fareTypes: string[];
   }>>;
 }
 
 export function FlightFilters({ results, filters, setFilters }: FlightFiltersProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [availableAirlines, setAvailableAirlines] = useState<string[]>([]);
-  const [availableFareTypes, setAvailableFareTypes] = useState<string[]>([]);
   const [maxPriceValue, setMaxPriceValue] = useState<number>(filters.maxPrice);
+  const [error, setError] = useState<string | null>(null);
   
+  // Extract airlines and max price from results
   useEffect(() => {
-    if (results.length > 0) {
-      // Extract unique airlines from results
-      const airlines = [...new Set(results.map(r => r.airline))];
-      setAvailableAirlines(airlines);
+    try {
+      logger.debug('Extracting filter data from results');
       
-      // Extract unique fare types from results
-      const fareTypes = [...new Set(results.filter(r => r.fareType).map(r => r.fareType))];
-      setAvailableFareTypes(fareTypes);
+      // Extract unique airlines
+      if (results.length > 0) {
+        const airlines = [...new Set(results
+          .filter(r => r && r.airline) // Make sure the airline property exists
+          .map(r => r.airline as string))
+        ];
+        
+        logger.debug(`Found ${airlines.length} airlines in results`);
+        setAvailableAirlines(airlines);
+      }
       
       // Find max price for slider
-      const prices = results.map(r => parseInt(r.price.replace(/[^0-9]/g, '')));
-      const maxPrice = Math.max(...prices);
+      const prices = results
+        .filter(r => r && r.price)
+        .map(r => {
+          try {
+            return parseInt(r.price.replace(/[^0-9]/g, ''));
+          } catch (e) {
+            logger.warn('Invalid price format:', r.price);
+            return 0;
+          }
+        })
+        .filter(p => !isNaN(p) && p > 0);
       
-      // Only update if the current filter is higher or not set
-      if (maxPrice > filters.maxPrice || filters.maxPrice === 2000) {
-        setFilters(prev => ({ ...prev, maxPrice: Math.ceil(maxPrice / 100) * 100 }));
-        setMaxPriceValue(Math.ceil(maxPrice / 100) * 100);
+      if (prices.length > 0) {
+        const maxPrice = Math.max(...prices);
+        
+        // Only update if the current filter is higher or not set
+        if (maxPrice > filters.maxPrice || filters.maxPrice === 2000) {
+          const roundedMaxPrice = Math.ceil(maxPrice / 100) * 100;
+          logger.debug(`Setting max price to ${roundedMaxPrice}`);
+          setFilters(prev => ({ ...prev, maxPrice: roundedMaxPrice }));
+          setMaxPriceValue(roundedMaxPrice);
+        }
       }
+    } catch (error) {
+      logger.error('Error extracting filter data:', error);
+      setError('Failed to extract filter data from results');
     }
   }, [results]);
   
-  const handlePriceChange = (value: number[]) => {
-    setMaxPriceValue(value[0]);
-  };
+  const handlePriceChange = useCallback((value: number[]) => {
+    try {
+      setMaxPriceValue(value[0]);
+    } catch (error) {
+      logger.error('Error updating price value:', error);
+      setError('Failed to update price filter');
+    }
+  }, []);
   
-  const handlePriceCommit = (value: number[]) => {
-    setFilters(prev => ({ ...prev, maxPrice: value[0] }));
-  };
+  const handlePriceCommit = useCallback((value: number[]) => {
+    try {
+      setFilters(prev => ({ ...prev, maxPrice: value[0] }));
+    } catch (error) {
+      logger.error('Error committing price value:', error);
+      setError('Failed to apply price filter');
+    }
+  }, [setFilters]);
   
-  const handleStopsChange = (stops: number) => {
-    setFilters(prev => ({ ...prev, maxStops: stops }));
-  };
+  const handleStopsChange = useCallback((stops: number) => {
+    try {
+      setFilters(prev => ({ ...prev, maxStops: stops }));
+    } catch (error) {
+      logger.error('Error changing stops filter:', error);
+      setError('Failed to update stops filter');
+    }
+  }, [setFilters]);
   
-  const handleAirlineChange = (airline: string, checked: boolean) => {
-    setFilters(prev => {
-      if (checked) {
-        return { ...prev, airlines: [...prev.airlines, airline] };
-      } else {
-        return { ...prev, airlines: prev.airlines.filter(a => a !== airline) };
-      }
-    });
-  };
+  const handleAirlineChange = useCallback((airline: string, checked: boolean) => {
+    try {
+      setFilters(prev => {
+        if (checked) {
+          return { ...prev, airlines: [...prev.airlines, airline] };
+        } else {
+          return { ...prev, airlines: prev.airlines.filter(a => a !== airline) };
+        }
+      });
+    } catch (error) {
+      logger.error('Error changing airline filter:', error);
+      setError('Failed to update airline filter');
+    }
+  }, [setFilters]);
   
-  const handleLuggageFilterChange = (key: keyof typeof filters.luggageFilters, value: any) => {
-    setFilters(prev => ({
-      ...prev,
-      luggageFilters: {
-        ...prev.luggageFilters,
-        [key]: value
-      }
-    }));
-  };
+  const handleResetFilters = useCallback(() => {
+    try {
+      logger.debug('Resetting filters to defaults');
+      setFilters({
+        maxPrice: 2000,
+        maxStops: 2,
+        airlines: [],
+        departureTime: [0, 24],
+        arrivalTime: [0, 24]
+      });
+      setError(null);
+    } catch (error) {
+      logger.error('Error resetting filters:', error);
+      setError('Failed to reset filters');
+    }
+  }, [setFilters]);
   
-  const handleAmenityFilterChange = (key: keyof typeof filters.amenityFilters, value: any) => {
-    setFilters(prev => ({
-      ...prev,
-      amenityFilters: {
-        ...prev.amenityFilters,
-        [key]: value
-      }
-    }));
-  };
+  const filterCount = (
+    (filters.maxPrice < 2000 ? 1 : 0) +
+    (filters.maxStops < 2 ? 1 : 0) +
+    (filters.airlines.length > 0 ? 1 : 0) +
+    (filters.departureTime[0] > 0 || filters.departureTime[1] < 24 ? 1 : 0) +
+    (filters.arrivalTime[0] > 0 || filters.arrivalTime[1] < 24 ? 1 : 0)
+  );
   
-  const handleMealTypeChange = (mealType: string, checked: boolean) => {
-    setFilters(prev => {
-      const currentMealTypes = prev.amenityFilters.mealTypes;
-      
-      if (checked) {
-        return {
-          ...prev,
-          amenityFilters: {
-            ...prev.amenityFilters,
-            mealTypes: [...currentMealTypes, mealType]
-          }
-        };
-      } else {
-        return {
-          ...prev,
-          amenityFilters: {
-            ...prev.amenityFilters,
-            mealTypes: currentMealTypes.filter(m => m !== mealType)
-          }
-        };
-      }
-    });
-  };
-  
-  const handleFareTypeChange = (fareType: string, checked: boolean) => {
-    setFilters(prev => {
-      if (checked) {
-        return { ...prev, fareTypes: [...prev.fareTypes, fareType] };
-      } else {
-        return { ...prev, fareTypes: prev.fareTypes.filter(f => f !== fareType) };
-      }
-    });
-  };
-  
-  const handleCancellationPolicyChange = (policy: typeof filters.cancellationPolicy) => {
-    setFilters(prev => ({
-      ...prev,
-      cancellationPolicy: policy
-    }));
-  };
-  
-  const handleResetFilters = () => {
-    setFilters({
-      maxPrice: 2000,
-      maxStops: 2,
-      airlines: [],
-      departureTime: [0, 24],
-      arrivalTime: [0, 24],
-      luggageFilters: {
-        minCheckedBags: 0,
-        requiresCarryOn: false,
-        requiresPersonalItem: false
-      },
-      amenityFilters: {
-        requiresWifi: false,
-        requiresPower: false,
-        requiresEntertainment: false,
-        mealTypes: [],
-        minLegroom: 'any'
-      },
-      cancellationPolicy: 'any',
-      fareTypes: []
-    });
-  };
-  
-  const getFilterCount = () => {
-    let count = 0;
-    
-    // Basic filters
-    if (filters.maxPrice < 2000) count++;
-    if (filters.maxStops < 2) count++;
-    if (filters.airlines.length > 0) count++;
-    if (filters.departureTime[0] > 0 || filters.departureTime[1] < 24) count++;
-    if (filters.arrivalTime[0] > 0 || filters.arrivalTime[1] < 24) count++;
-    
-    // Luggage filters
-    if (filters.luggageFilters.minCheckedBags > 0) count++;
-    if (filters.luggageFilters.requiresCarryOn) count++;
-    if (filters.luggageFilters.requiresPersonalItem) count++;
-    
-    // Amenity filters
-    if (filters.amenityFilters.requiresWifi) count++;
-    if (filters.amenityFilters.requiresPower) count++;
-    if (filters.amenityFilters.requiresEntertainment) count++;
-    if (filters.amenityFilters.mealTypes.length > 0) count++;
-    if (filters.amenityFilters.minLegroom !== 'any') count++;
-    
-    // Other filters
-    if (filters.cancellationPolicy !== 'any') count++;
-    if (filters.fareTypes.length > 0) count++;
-    
-    return count;
-  };
-  
-  const filterCount = getFilterCount();
+  if (error) {
+    return (
+      <div className="p-3 bg-red-50 border border-red-200 rounded-md mb-4">
+        <div className="flex items-start">
+          <AlertTriangle className="h-5 w-5 text-red-500 mr-2 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-700">Filter Error</p>
+            <p className="text-xs text-red-600 mt-1">{error}</p>
+            <Button 
+              size="sm" 
+              variant="outline" 
+              className="mt-2 bg-white" 
+              onClick={handleResetFilters}
+            >
+              <RotateCcw className="h-3 w-3 mr-1" />
+              Reset Filters
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div>
@@ -253,387 +199,91 @@ export function FlightFilters({ results, filters, setFilters }: FlightFiltersPro
       
       {isExpanded && (
         <div className="border rounded-md p-4 bg-gray-50 animate-fade-in mb-4">
-          <Accordion type="multiple" defaultValue={["basic"]}>
-            <AccordionItem value="basic">
-              <AccordionTrigger className="text-sm font-medium py-2">
-                Basic Filters
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-2">
-                  <div>
-                    <div className="mb-4">
-                      <Label className="mb-2 block text-sm font-medium">Max Price: ${maxPriceValue}</Label>
-                      <Slider 
-                        defaultValue={[filters.maxPrice]} 
-                        max={5000} 
-                        step={50} 
-                        value={[maxPriceValue]}
-                        onValueChange={handlePriceChange}
-                        onValueCommit={handlePriceCommit}
-                      />
-                    </div>
-                    
-                    <div>
-                      <Label className="mb-2 block text-sm font-medium">Maximum Stops</Label>
-                      <div className="flex items-center space-x-4">
-                        <div className="flex items-center space-x-2">
-                          <Checkbox 
-                            id="nonstop" 
-                            checked={filters.maxStops === 0}
-                            onCheckedChange={() => handleStopsChange(0)}
-                          />
-                          <label
-                            htmlFor="nonstop"
-                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                          >
-                            Nonstop
-                          </label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Checkbox 
-                            id="onestop" 
-                            checked={filters.maxStops === 1}
-                            onCheckedChange={() => handleStopsChange(1)}
-                          />
-                          <label
-                            htmlFor="onestop"
-                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                          >
-                            Max 1 Stop
-                          </label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Checkbox 
-                            id="twostops" 
-                            checked={filters.maxStops === 2}
-                            onCheckedChange={() => handleStopsChange(2)}
-                          />
-                          <label
-                            htmlFor="twostops"
-                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                          >
-                            Any
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    {availableAirlines.length > 0 && (
-                      <div>
-                        <Label className="mb-2 block text-sm font-medium">Airlines</Label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {availableAirlines.map(airline => (
-                            <div key={airline} className="flex items-center space-x-2">
-                              <Checkbox 
-                                id={`airline-${airline}`} 
-                                checked={filters.airlines.length === 0 || filters.airlines.includes(airline)}
-                                onCheckedChange={(checked) => handleAirlineChange(airline, checked as boolean)}
-                              />
-                              <label
-                                htmlFor={`airline-${airline}`}
-                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                              >
-                                {airline}
-                              </label>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-            
-            <AccordionItem value="luggage">
-              <AccordionTrigger className="text-sm font-medium py-2">
-                <div className="flex items-center">
-                  <Briefcase className="h-4 w-4 mr-2" />
-                  Luggage Options
-                </div>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="py-2 space-y-4">
-                  <div>
-                    <Label className="mb-2 block text-sm font-medium">Minimum Checked Bags</Label>
-                    <RadioGroup 
-                      value={String(filters.luggageFilters.minCheckedBags)}
-                      onValueChange={(value) => handleLuggageFilterChange('minCheckedBags', parseInt(value))}
-                      className="flex space-x-4"
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <div className="mb-4">
+                <Label className="mb-2 block text-sm font-medium">Max Price: ${maxPriceValue}</Label>
+                <Slider 
+                  defaultValue={[filters.maxPrice]} 
+                  max={5000} 
+                  step={50} 
+                  value={[maxPriceValue]}
+                  onValueChange={handlePriceChange}
+                  onValueCommit={handlePriceCommit}
+                />
+              </div>
+              
+              <div>
+                <Label className="mb-2 block text-sm font-medium">Maximum Stops</Label>
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="nonstop" 
+                      checked={filters.maxStops === 0}
+                      onCheckedChange={() => handleStopsChange(0)}
+                    />
+                    <label
+                      htmlFor="nonstop"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                     >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="0" id="checked-0" />
-                        <label htmlFor="checked-0" className="text-sm">Any</label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="1" id="checked-1" />
-                        <label htmlFor="checked-1" className="text-sm">At least 1</label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="2" id="checked-2" />
-                        <label htmlFor="checked-2" className="text-sm">At least 2</label>
-                      </div>
-                    </RadioGroup>
+                      Nonstop
+                    </label>
                   </div>
-                  
-                  <div className="flex space-x-6">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="requires-carry-on" 
-                        checked={filters.luggageFilters.requiresCarryOn}
-                        onCheckedChange={(checked) => handleLuggageFilterChange('requiresCarryOn', !!checked)}
-                      />
-                      <label
-                        htmlFor="requires-carry-on"
-                        className="text-sm font-medium leading-none"
-                      >
-                        Carry-on included
-                      </label>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="requires-personal-item" 
-                        checked={filters.luggageFilters.requiresPersonalItem}
-                        onCheckedChange={(checked) => handleLuggageFilterChange('requiresPersonalItem', !!checked)}
-                      />
-                      <label
-                        htmlFor="requires-personal-item"
-                        className="text-sm font-medium leading-none"
-                      >
-                        Personal item included
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-            
-            <AccordionItem value="amenities">
-              <AccordionTrigger className="text-sm font-medium py-2">
-                <div className="flex items-center">
-                  <Coffee className="h-4 w-4 mr-2" />
-                  Amenities & Comfort
-                </div>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="py-2 space-y-4">
-                  <div className="flex flex-wrap gap-y-2 gap-x-4">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="requires-wifi" 
-                        checked={filters.amenityFilters.requiresWifi}
-                        onCheckedChange={(checked) => handleAmenityFilterChange('requiresWifi', !!checked)}
-                      />
-                      <label
-                        htmlFor="requires-wifi"
-                        className="text-sm font-medium leading-none flex items-center"
-                      >
-                        <Wifi className="h-3 w-3 mr-1 text-blue-600" />
-                        WiFi Available
-                      </label>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="requires-power" 
-                        checked={filters.amenityFilters.requiresPower}
-                        onCheckedChange={(checked) => handleAmenityFilterChange('requiresPower', !!checked)}
-                      />
-                      <label
-                        htmlFor="requires-power"
-                        className="text-sm font-medium leading-none flex items-center"
-                      >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-3 w-3 mr-1 text-green-600">
-                          <path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                        Power Outlets
-                      </label>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="requires-entertainment" 
-                        checked={filters.amenityFilters.requiresEntertainment}
-                        onCheckedChange={(checked) => handleAmenityFilterChange('requiresEntertainment', !!checked)}
-                      />
-                      <label
-                        htmlFor="requires-entertainment"
-                        className="text-sm font-medium leading-none flex items-center"
-                      >
-                        <Monitor className="h-3 w-3 mr-1 text-purple-600" />
-                        Entertainment
-                      </label>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <Label className="mb-2 block text-sm font-medium">Legroom Preference</Label>
-                    <RadioGroup 
-                      value={filters.amenityFilters.minLegroom}
-                      onValueChange={(value) => handleAmenityFilterChange('minLegroom', value)}
-                      className="flex space-x-4"
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="onestop" 
+                      checked={filters.maxStops === 1}
+                      onCheckedChange={() => handleStopsChange(1)}
+                    />
+                    <label
+                      htmlFor="onestop"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                     >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="any" id="legroom-any" />
-                        <label htmlFor="legroom-any" className="text-sm">Any</label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="standard" id="legroom-standard" />
-                        <label htmlFor="legroom-standard" className="text-sm">Standard</label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="extra" id="legroom-extra" />
-                        <label htmlFor="legroom-extra" className="text-sm">Extra</label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="premium" id="legroom-premium" />
-                        <label htmlFor="legroom-premium" className="text-sm">Premium</label>
-                      </div>
-                    </RadioGroup>
+                      Max 1 Stop
+                    </label>
                   </div>
-                  
-                  <div>
-                    <Label className="mb-2 block text-sm font-medium">Meal Service</Label>
-                    <div className="flex space-x-4">
-                      <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="twostops" 
+                      checked={filters.maxStops === 2}
+                      onCheckedChange={() => handleStopsChange(2)}
+                    />
+                    <label
+                      htmlFor="twostops"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      Any
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              {availableAirlines.length > 0 && (
+                <div>
+                  <Label className="mb-2 block text-sm font-medium">Airlines</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {availableAirlines.map(airline => (
+                      <div key={airline} className="flex items-center space-x-2">
                         <Checkbox 
-                          id="meal-snack" 
-                          checked={filters.amenityFilters.mealTypes.includes('snack')}
-                          onCheckedChange={(checked) => handleMealTypeChange('snack', !!checked)}
+                          id={`airline-${airline}`} 
+                          checked={filters.airlines.length === 0 || filters.airlines.includes(airline)}
+                          onCheckedChange={(checked) => handleAirlineChange(airline, checked as boolean)}
                         />
                         <label
-                          htmlFor="meal-snack"
-                          className="text-sm font-medium leading-none"
+                          htmlFor={`airline-${airline}`}
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                         >
-                          Snack
+                          {airline}
                         </label>
                       </div>
-                      
-                      <div className="flex items-center space-x-2">
-                        <Checkbox 
-                          id="meal-full" 
-                          checked={filters.amenityFilters.mealTypes.includes('full')}
-                          onCheckedChange={(checked) => handleMealTypeChange('full', !!checked)}
-                        />
-                        <label
-                          htmlFor="meal-full"
-                          className="text-sm font-medium leading-none"
-                        >
-                          Full Meal
-                        </label>
-                      </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
-              </AccordionContent>
-            </AccordionItem>
-            
-            <AccordionItem value="policies">
-              <AccordionTrigger className="text-sm font-medium py-2">
-                <div className="flex items-center">
-                  <CreditCard className="h-4 w-4 mr-2" />
-                  Fare & Policies
-                </div>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="py-2 space-y-4">
-                  <div>
-                    <Label className="mb-2 block text-sm font-medium">Cancellation Policy</Label>
-                    <RadioGroup 
-                      value={filters.cancellationPolicy}
-                      onValueChange={(value) => handleCancellationPolicyChange(value as any)}
-                      className="flex space-x-4"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="any" id="cancel-any" />
-                        <label htmlFor="cancel-any" className="text-sm">Any</label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="refundable" id="cancel-refundable" />
-                        <label htmlFor="cancel-refundable" className="text-sm">Refundable</label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="partial" id="cancel-partial" />
-                        <label htmlFor="cancel-partial" className="text-sm">Partial Refund</label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="non-refundable" id="cancel-non-refundable" />
-                        <label htmlFor="cancel-non-refundable" className="text-sm">Non-refundable</label>
-                      </div>
-                    </RadioGroup>
-                  </div>
-                  
-                  {availableFareTypes.length > 0 && (
-                    <div>
-                      <Label className="mb-2 block text-sm font-medium">Fare Types</Label>
-                      <div className="flex flex-wrap gap-2">
-                        {availableFareTypes.map(fareType => (
-                          <div key={fareType} className="flex items-center space-x-2">
-                            <Checkbox 
-                              id={`fare-${fareType}`} 
-                              checked={filters.fareTypes.length === 0 || filters.fareTypes.includes(fareType)}
-                              onCheckedChange={(checked) => handleFareTypeChange(fareType, checked as boolean)}
-                            />
-                            <label
-                              htmlFor={`fare-${fareType}`}
-                              className="text-sm font-medium leading-none"
-                            >
-                              {fareType}
-                            </label>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-            
-            <AccordionItem value="times">
-              <AccordionTrigger className="text-sm font-medium py-2">
-                <div className="flex items-center">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Flight Times
-                </div>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="py-2 space-y-4">
-                  {/* We'll use the existing departure/arrival time filters here,
-                      but we could easily add more detailed time preferences here */}
-                  <div>
-                    <Label className="mb-2 block text-sm font-medium">
-                      Departure Time: {filters.departureTime[0]}:00 - {filters.departureTime[1]}:00
-                    </Label>
-                    <Slider 
-                      defaultValue={filters.departureTime} 
-                      min={0}
-                      max={24} 
-                      step={1} 
-                      value={filters.departureTime}
-                      onValueChange={(value) => setFilters(prev => ({ ...prev, departureTime: value }))}
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label className="mb-2 block text-sm font-medium">
-                      Arrival Time: {filters.arrivalTime[0]}:00 - {filters.arrivalTime[1]}:00
-                    </Label>
-                    <Slider 
-                      defaultValue={filters.arrivalTime} 
-                      min={0}
-                      max={24} 
-                      step={1} 
-                      value={filters.arrivalTime}
-                      onValueChange={(value) => setFilters(prev => ({ ...prev, arrivalTime: value }))}
-                    />
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
