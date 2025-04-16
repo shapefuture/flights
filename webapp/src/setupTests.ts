@@ -60,6 +60,32 @@ vi.mock('@supabase/supabase-js', () => {
   };
 });
 
+// Mock Radix UI components
+vi.mock('@radix-ui/react-slot', () => ({
+  Slot: ({ children }: { children: React.ReactNode }) => children,
+  default: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+vi.mock('@radix-ui/react-slider', () => ({
+  Root: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Track: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Range: () => <div />,
+  Thumb: () => <div />,
+}));
+
+vi.mock('@radix-ui/react-switch', () => ({
+  Root: ({ checked, onCheckedChange }: { checked: boolean; onCheckedChange: (checked: boolean) => void }) => (
+    <button 
+      role="switch" 
+      aria-checked={checked} 
+      onClick={() => onCheckedChange(!checked)}
+    />
+  ),
+}));
+
+// Mock React Router DOM
+vi.mock('react-router-dom');
+
 // Mock ResizeObserver which isn't available in JSDOM
 global.ResizeObserver = vi.fn().mockImplementation(() => ({
   observe: vi.fn(),
