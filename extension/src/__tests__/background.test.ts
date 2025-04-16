@@ -1,20 +1,27 @@
 import { vi } from 'vitest';
 
-// Setup mock chrome API
-const mockChrome = {
+// Setup mock chrome API before importing background
+global.chrome = {
   runtime: {
-    onInstalled: {
-      addListener: vi.fn()
-    },
-    onMessageExternal: {
-      addListener: vi.fn()
-    },
+    onInstalled: { addListener: vi.fn() },
+    onMessageExternal: { addListener: vi.fn() },
+    getManifest: vi.fn(() => ({ version: '0.1.0' })),
     lastError: null
   },
   storage: {
     local: {
-      get: vi.fn(),
-      set: vi.fn()
+      get: vi.fn().mockImplementation((keys, callback) => {
+        if (callback) callback({});
+        return Promise.resolve({});
+      }),
+      set: vi.fn().mockImplementation((data, callback) => {
+        if (callback) callback();
+        return Promise.resolve();
+      }),
+      getBytesInUse: vi.fn().mockImplementation((keys, callback) => {
+        if (callback) callback(0);
+        return Promise.resolve(0);
+      })
     }
   },
   tabs: {
@@ -22,9 +29,7 @@ const mockChrome = {
   }
 };
 
-global.chrome = mockChrome as any;
-
-// Import the module after mocking chrome
+// Now it's safe to import background
 import '../background';
 
 describe('Extension Background Script', () => {
@@ -32,24 +37,26 @@ describe('Extension Background Script', () => {
     vi.resetAllMocks();
     
     // Default mock implementations
-    mockChrome.storage.local.get.mockImplementation((keys, callback) => {
-      callback({}); // Return empty object by default
+    chrome.storage.local.get.mockImplementation((keys, callback) => {
+      if (callback) callback({});
+      return Promise.resolve({});
     });
     
-    mockChrome.storage.local.set.mockImplementation((data, callback) => {
+    chrome.storage.local.set.mockImplementation((data, callback) => {
       if (callback) callback();
+      return Promise.resolve();
     });
   });
 
   it('should initialize storage on install', () => {
     // Get the install handler
-    const installHandler = mockChrome.runtime.onInstalled.addListener.mock.calls[0][0];
+    const installHandler = chrome.runtime.onInstalled.addListener.mock.calls[0][0];
     
     // Call the handler
     installHandler();
     
     // Check that storage was initialized
-    expect(mockChrome.storage.local.set).toHaveBeenCalledWith(
+    expect(chrome.storage.local.set).toHaveBeenCalledWith(
       expect.objectContaining({
         version: expect.any(String),
         lastUpdated: expect.any(String),
@@ -62,7 +69,7 @@ describe('Extension Background Script', () => {
 
   it('should handle status check messages', () => {
     // Get the message handler
-    const messageHandler = mockChrome.runtime.onMessageExternal.addListener.mock.calls[0][0];
+    const messageHandler = chrome.runtime.onMessageExternal.addListener.mock.calls[0][0];
     
     // Create a mock sender and sendResponse
     const sender = { tab: { id: 123 } };
@@ -85,15 +92,16 @@ describe('Extension Background Script', () => {
 
   it('should handle execution messages', async () => {
     // Get the message handler
-    const messageHandler = mockChrome.runtime.onMessageExternal.addListener.mock.calls[0][0];
+    const messageHandler = chrome.runtime.onMessageExternal.addListener.mock.calls[0][0];
     
     // Create a mock sender and sendResponse
     const sender = { tab: { id: 123 } };
     const sendResponse = vi.fn();
     
     // Setup storage mock
-    mockChrome.storage.local.get.mockImplementation((keys, callback) => {
-      callback({ searchesCompleted: 5 });
+    chrome.storage.local.get.mockImplementation((keys, callback) => {
+      if (callback) callback({ searchesCompleted: 5 });
+      return Promise.resolve({ searchesCompleted: 5 });
     });
     
     // Call the handler with an execute message
@@ -117,13 +125,13 @@ describe('Extension Background Script', () => {
     await new Promise(resolve => setTimeout(resolve, 0));
     
     // Check that search count was updated
-    expect(mockChrome.storage.local.set).toHaveBeenCalledWith(
+    expect(chrome.storage.local.set).toHaveBeenCalledWith(
       expect.objectContaining({ searchesCompleted: 6 }),
       expect.any(Function)
     );
     
     // Check that a message was sent back to the tab
-    expect(mockChrome.tabs.sendMessage).toHaveBeenCalledWith(
+    expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(
       123,
       expect.objectContaining({
         type: 'FETCH_RESULT',
@@ -137,7 +145,7 @@ describe('Extension Background Script', () => {
 
   it('should handle cancel messages', () => {
     // Get the message handler
-    const messageHandler = mockChrome.runtime.onMessageExternal.addListener.mock.calls[0][0];
+    const messageHandler = chrome.runtime.onMessageExternal.addListener.mock.calls[0][0];
     
     // Create a mock sender and sendResponse
     const sender = { tab: { id: 123 } };
@@ -154,15 +162,16 @@ describe('Extension Background Script', () => {
 
   it('should log errors to storage', async () => {
     // Get the message handler
-    const messageHandler = mockChrome.runtime.onMessageExternal.addListener.mock.calls[0][0];
+    const messageHandler = chrome.runtime.onMessageExternal.addListener.mock.calls[0][0];
     
     // Create a mock sender and sendResponse
     const sender = { tab: { id: 123 } };
     const sendResponse = vi.fn();
     
     // Setup storage mock to simulate an error
-    mockChrome.storage.local.get.mockImplementation((keys, callback) => {
-      callback({ errors: [] });
+    chrome.storage.local.get.mockImplementation((keys, callback) => {
+      if (callback) callback({ errors: [] });
+      return Promise.resolve({ errors: [] });
     });
     
     // Force an error by passing an invalid message
@@ -176,7 +185,7 @@ describe('Extension Background Script', () => {
     await new Promise(resolve => setTimeout(resolve, 0));
     
     // Check that an error was logged to storage
-    expect(mockChrome.storage.local.set).toHaveBeenCalledWith(
+    expect(chrome.storage.local.set).toHaveBeenCalledWith(
       expect.objectContaining({ 
         errors: expect.arrayContaining([
           expect.objectContaining({

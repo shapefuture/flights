@@ -1,273 +1,205 @@
 import logger from '../utils/logger';
 
-/**
- * API Error class for structured error handling
- */
+// Custom error class for API errors
 export class ApiError extends Error {
   status: number;
-  data: any;
+  details?: any;
   
-  constructor(message: string, status: number, data?: any) {
+  constructor(message: string, status: number = 500, details?: any) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
-    this.data = data;
+    this.details = details;
   }
 }
 
+// Global request timeout in milliseconds
+const DEFAULT_TIMEOUT = 30000;
+
 /**
- * Configuration for API requests
+ * Log API request details
  */
-interface ApiConfig {
-  baseUrl?: string;
-  timeout?: number;
-  headers?: Record<string, string>;
+function logApiRequest(method: string, url: string, body?: any) {
+  logger.debug(`API ${method} request to ${url}`, body);
 }
 
 /**
- * Default API configuration
+ * Log API response details
  */
-const defaultConfig: ApiConfig = {
-  baseUrl: import.meta.env.VITE_API_BASE_URL || '/api',
-  timeout: 30000, // 30 seconds
-  headers: {
-    'Content-Type': 'application/json'
-  }
-};
-
-/**
- * Parse the API response based on content type
- */
-async function parseResponse(response: Response): Promise<any> {
-  const contentType = response.headers.get('Content-Type') || '';
-  
-  try {
-    if (contentType.includes('application/json')) {
-      return await response.json();
-    }
-    
-    if (contentType.includes('text/')) {
-      return await response.text();
-    }
-    
-    // Default to arrayBuffer for binary data
-    return await response.arrayBuffer();
-  } catch (error) {
-    logger.error('Failed to parse API response:', error);
-    throw new ApiError(
-      'Failed to parse server response',
-      response.status,
-      { originalError: error }
-    );
-  }
+function logApiResponse(method: string, url: string, status: number, data: any) {
+  logger.debug(`API ${method} response from ${url}`, { status, data });
 }
 
 /**
- * Make a fetch request with timeout and error handling
+ * Fetch with timeout
  */
 export async function fetchWithTimeout(
-  url: string,
-  options: RequestInit,
-  timeout: number
+  url: string, 
+  options: RequestInit = {}, 
+  timeoutMs: number = DEFAULT_TIMEOUT
 ): Promise<Response> {
-  // Create an abort controller for timeouts
+  // Create an AbortController to handle timeouts
   const controller = new AbortController();
   const { signal } = controller;
   
-  // Set up the timeout
-  const timeoutId = setTimeout(() => {
-    controller.abort();
-  }, timeout);
+  // Create a timeout Promise
+  const timeoutPromise = new Promise<Response>((_, reject) => {
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+      reject(new ApiError(`Request timed out after ${timeoutMs}ms`, 408));
+    }, timeoutMs);
+    
+    // Clean up the timeout if the fetch resolves or rejects
+    signal.addEventListener('abort', () => clearTimeout(timeoutId));
+  });
+  
+  // Create the fetch Promise with the signal
+  const fetchPromise = fetch(url, {
+    ...options,
+    signal
+  });
+  
+  // Race the fetch and timeout
+  return Promise.race([fetchPromise, timeoutPromise]);
+}
+
+/**
+ * Call the agent API with the user's query
+ */
+export async function callAgentApi(query: string, context?: any, apiKey?: string) {
+  const url = '/api/agent';
+  
+  logApiRequest('POST', url, { query, context });
   
   try {
-    const response = await fetch(url, {
-      ...options,
-      signal
-    });
+    const response = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {})
+        },
+        body: JSON.stringify({ query, context })
+      }
+    );
     
-    // Clear the timeout
-    clearTimeout(timeoutId);
+    // Check if the response is successful
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new ApiError(
+        errorData.error || `API error: ${response.status} ${response.statusText}`,
+        response.status,
+        errorData
+      );
+    }
     
-    return response;
+    const data = await response.json();
+    logApiResponse('POST', url, response.status, data);
+    
+    return data;
   } catch (error) {
-    // Clear the timeout
-    clearTimeout(timeoutId);
-    
-    // Handle abort errors (timeout)
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new ApiError('Request timeout', 408);
+    // Re-throw ApiError instances
+    if (error instanceof ApiError) {
+      throw error;
     }
     
     // Handle network errors
-    if (error instanceof TypeError && error.message.includes('NetworkError')) {
-      throw new ApiError('Network error. Please check your connection.', 0);
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new ApiError('Request aborted', 499);
     }
     
-    // Re-throw other errors
-    throw error;
+    // Handle other errors
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error(`API call failed: ${message}`);
+    throw new ApiError(`API call failed: ${message}`);
   }
 }
 
 /**
- * Call the agent API with proper error handling and logging
- */
-export async function callAgentApi(query: string, context?: any): Promise<any> {
-  logger.logApiRequest('/api/agent', 'POST', { query, context });
-  
-  try {
-    const response = await fetchWithTimeout(
-      `${defaultConfig.baseUrl}/agent`,
-      {
-        method: 'POST',
-        headers: defaultConfig.headers,
-        body: JSON.stringify({ query, context })
-      },
-      defaultConfig.timeout!
-    );
-    
-    const data = await parseResponse(response);
-    
-    logger.logApiResponse('/api/agent', response.status, data);
-    
-    // Check for error in the response data
-    if (!response.ok) {
-      throw new ApiError(
-        data.error || 'An unknown error occurred',
-        response.status,
-        data
-      );
-    }
-    
-    return data;
-  } catch (error) {
-    // Log and transform errors for consistent handling
-    if (error instanceof ApiError) {
-      logger.error('API Error:', error.message, { status: error.status, data: error.data });
-      return { error: error.message };
-    } else {
-      logger.error('Unexpected API Error:', error);
-      return { error: error instanceof Error ? error.message : 'Unknown error occurred' };
-    }
-  }
-}
-
-/**
- * Check the health of the API
- */
-export async function checkApiHealth(): Promise<{ status: string, version?: string }> {
-  logger.logApiRequest('/api/health', 'GET');
-  
-  try {
-    const response = await fetchWithTimeout(
-      `${defaultConfig.baseUrl}/health`,
-      {
-        method: 'GET',
-        headers: defaultConfig.headers
-      },
-      5000 // Quick timeout for health check
-    );
-    
-    const data = await parseResponse(response);
-    
-    logger.logApiResponse('/api/health', response.status, data);
-    
-    if (!response.ok) {
-      throw new ApiError(
-        data.error || 'API health check failed',
-        response.status,
-        data
-      );
-    }
-    
-    return data;
-  } catch (error) {
-    logger.error('API Health Check Failed:', error);
-    return { status: 'error' };
-  }
-}
-
-/**
- * Create a general-purpose api object for reuse
+ * Generic API object with convenience methods
  */
 export const api = {
-  get: async (endpoint: string, config?: Partial<ApiConfig>) => {
-    const mergedConfig = { ...defaultConfig, ...config };
-    logger.logApiRequest(endpoint, 'GET');
+  async get(url: string, options?: RequestInit) {
+    logApiRequest('GET', url);
     
     try {
-      const response = await fetchWithTimeout(
-        `${mergedConfig.baseUrl}${endpoint}`,
-        {
-          method: 'GET',
-          headers: mergedConfig.headers
-        },
-        mergedConfig.timeout!
-      );
-      
-      const data = await parseResponse(response);
-      
-      logger.logApiResponse(endpoint, response.status, data);
+      const response = await fetchWithTimeout(url, {
+        method: 'GET',
+        ...options
+      });
       
       if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
         throw new ApiError(
-          data.error || `GET request to ${endpoint} failed`,
+          errorData.error || `API error: ${response.status} ${response.statusText}`,
           response.status,
-          data
+          errorData
         );
       }
       
+      const data = await response.json();
+      logApiResponse('GET', url, response.status, data);
+      
       return data;
     } catch (error) {
+      // Re-throw ApiError instances
       if (error instanceof ApiError) {
         throw error;
       }
       
-      throw new ApiError(
-        error instanceof Error ? error.message : 'Unknown error occurred',
-        0,
-        { originalError: error }
-      );
+      // Handle other errors
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(`GET request failed: ${message}`);
+      throw new ApiError(`GET request failed: ${message}`);
     }
   },
   
-  post: async (endpoint: string, body: any, config?: Partial<ApiConfig>) => {
-    const mergedConfig = { ...defaultConfig, ...config };
-    logger.logApiRequest(endpoint, 'POST', body);
+  async post(url: string, body?: any, options?: RequestInit) {
+    logApiRequest('POST', url, body);
     
     try {
-      const response = await fetchWithTimeout(
-        `${mergedConfig.baseUrl}${endpoint}`,
-        {
-          method: 'POST',
-          headers: mergedConfig.headers,
-          body: JSON.stringify(body)
+      const response = await fetchWithTimeout(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
         },
-        mergedConfig.timeout!
-      );
-      
-      const data = await parseResponse(response);
-      
-      logger.logApiResponse(endpoint, response.status, data);
+        body: body ? JSON.stringify(body) : undefined,
+        ...options
+      });
       
       if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
         throw new ApiError(
-          data.error || `POST request to ${endpoint} failed`,
+          errorData.error || `API error: ${response.status} ${response.statusText}`,
           response.status,
-          data
+          errorData
         );
       }
       
+      const data = await response.json();
+      logApiResponse('POST', url, response.status, data);
+      
       return data;
     } catch (error) {
+      // Re-throw ApiError instances
       if (error instanceof ApiError) {
         throw error;
       }
       
-      throw new ApiError(
-        error instanceof Error ? error.message : 'Unknown error occurred',
-        0,
-        { originalError: error }
-      );
+      // Handle other errors
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(`POST request failed: ${message}`);
+      throw new ApiError(`POST request failed: ${message}`);
     }
   }
+};
+
+export default {
+  fetchWithTimeout,
+  callAgentApi,
+  api,
+  logApiRequest,
+  logApiResponse,
+  ApiError
 };
