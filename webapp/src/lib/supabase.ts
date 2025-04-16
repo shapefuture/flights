@@ -33,6 +33,28 @@ export type UserSubscription = {
   stripeSubscriptionId?: string;
 };
 
+// Authentication providers
+export enum AuthProvider {
+  GOOGLE = 'google',
+  EMAIL = 'email'
+}
+
+// Sign in with Google
+export async function signInWithGoogle() {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: `${window.location.origin}/auth/callback`,
+      queryParams: {
+        access_type: 'offline',
+        prompt: 'consent',
+      }
+    }
+  });
+
+  return { data, error };
+}
+
 // Get user profile from Supabase
 export async function getUserProfile(userId: string): Promise<User | null> {
   const { data, error } = await supabase

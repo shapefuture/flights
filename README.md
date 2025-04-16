@@ -13,7 +13,8 @@ A web-based flight finding tool that accepts complex natural language queries an
 - **Saved Searches**: Store and reuse your favorite flight queries
 - **Intelligent Refinement**: Provide feedback to the agent to refine your search results
 - **Dark Mode & Mobile Optimized**: Enjoy a beautiful experience on any device at any time
-- **User Authentication**: Secure login with Supabase email/password authentication
+- **Google Authentication**: Quick and secure sign-in with your Google account
+- **Email Authentication**: Traditional email & password authentication as fallback
 - **Subscription Management**: Different pricing tiers for casual to frequent travelers
 - **Enhanced Mobile Experience**: Touch-optimized controls for natural mobile interaction
 - **Multi-language Support**: Interface available in multiple languages
@@ -28,7 +29,7 @@ This project follows an "Extension-Enhanced Pragmatist" architecture with Agenti
 - **Proxy (Secure Gateway)**: Serverless function that securely interfaces with the LLM
 - **LLM (Reasoning/Planning Agent)**: External LLM that interprets queries, plans steps, and provides reasoning
 - **Browser Extension (Data Agent)**: Optional component that fetches real-time flight data
-- **Authentication**: Supabase for user authentication and management
+- **Authentication**: Supabase for user authentication (Google OAuth and email/password)
 - **Payments**: Stripe integration for subscription management
 
 ## Getting Started
@@ -38,6 +39,7 @@ This project follows an "Extension-Enhanced Pragmatist" architecture with Agenti
 - Node.js 18+ and pnpm
 - Account on OpenRouter for API access
 - Account on Supabase for authentication
+- Google OAuth client ID (for Google Sign-In)
 - Account on Stripe for payment processing
 - Account on Cloudflare/Vercel for deployment
 
@@ -48,6 +50,7 @@ This project follows an "Extension-Enhanced Pragmatist" architecture with Agenti
 3. Set up environment variables:
    - Create a `.env` file in the root directory based on `.env.example`
    - Add your API keys for OpenRouter, Supabase, and Stripe
+   - Add your Google OAuth client ID for Google Sign-In
 4. Start the development servers:
    - Frontend: `pnpm dev:webapp`
    - Proxy: `pnpm dev:proxy`
@@ -55,6 +58,22 @@ This project follows an "Extension-Enhanced Pragmatist" architecture with Agenti
    - Navigate to chrome://extensions/
    - Enable "Developer mode"
    - Click "Load unpacked" and select the `/extension` directory
+
+### Setting Up Google Authentication
+
+To enable Google Sign-In, you need to:
+
+1. Create a project in the [Google Cloud Console](https://console.cloud.google.com/)
+2. Configure the OAuth consent screen
+3. Create OAuth client ID credentials for a Web Application
+4. Add your application's domain to the authorized JavaScript origins
+5. Add `https://your-domain.com/auth/callback` to the authorized redirect URIs
+6. Add the client ID to your `.env` file as `VITE_GOOGLE_CLIENT_ID`
+7. Configure Supabase authentication:
+   - Go to Authentication > Providers in your Supabase dashboard
+   - Enable Google provider
+   - Add your Google Client ID and Client Secret
+   - Set the authorized redirect URL to `https://your-supabase-project.supabase.co/auth/v1/callback`
 
 ### Building for Production
 

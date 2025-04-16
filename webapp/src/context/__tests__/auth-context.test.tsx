@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AuthProvider, useAuth } from '../auth-context';
-import { supabase } from '../../lib/supabase';
+import { supabase, signInWithGoogle } from '../../lib/supabase';
 
 // Mock Supabase
 jest.mock('../../lib/supabase', () => ({
@@ -30,6 +30,11 @@ jest.mock('../../lib/supabase', () => ({
     rpc: jest.fn(),
   },
   getUserSubscription: jest.fn(),
+  signInWithGoogle: jest.fn(),
+  AuthProvider: {
+    GOOGLE: 'google',
+    EMAIL: 'email',
+  },
 }));
 
 // Test component that uses the auth context
@@ -38,7 +43,8 @@ function TestComponent() {
     user, 
     isAuthenticated, 
     signIn, 
-    signOut, 
+    signOut,
+    signInWithGoogle: googleSignIn,
     isLoading
   } = useAuth();
   
@@ -51,6 +57,7 @@ function TestComponent() {
           <p>Is authenticated: {isAuthenticated ? 'Yes' : 'No'}</p>
           {user && <p>User ID: {user.id}</p>}
           <button onClick={() => signIn('test@example.com', 'password')}>Sign In</button>
+          <button onClick={() => googleSignIn()}>Sign In with Google</button>
           <button onClick={() => signOut()}>Sign Out</button>
         </>
       )}
@@ -128,6 +135,33 @@ describe('AuthContext', () => {
       email: 'test@example.com',
       password: 'password',
     });
+  });
+  
+  it('handles Google sign in', async () => {
+    // Mock successful Google sign in
+    (signInWithGoogle as jest.Mock).mockResolvedValue({
+      data: { provider: 'google', url: 'https://oauth.google.com/redirect' },
+      error: null,
+    });
+    
+    render(
+      <AuthProvider>
+        <TestComponent />
+      </AuthProvider>
+    );
+    
+    await waitFor(() => {
+      expect(screen.getByText('Is authenticated: No')).toBeInTheDocument();
+    });
+    
+    // Click Google sign in button
+    const googleSignInButton = screen.getByText('Sign In with Google');
+    await act(async () => {
+      userEvent.click(googleSignInButton);
+    });
+    
+    // Verify Google sign in was called
+    expect(signInWithGoogle).toHaveBeenCalled();
   });
   
   it('handles sign out', async () => {

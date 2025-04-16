@@ -1,6 +1,12 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase, getUserSubscription, UserSubscription } from '../lib/supabase';
+import { 
+  supabase, 
+  getUserSubscription, 
+  UserSubscription, 
+  signInWithGoogle, 
+  AuthProvider 
+} from '../lib/supabase';
 import { debug, error, info } from '../utils/logger';
 
 interface AuthContextProps {
@@ -10,6 +16,7 @@ interface AuthContextProps {
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, metadata?: object) => Promise<{ error: Error | null }>;
+  signInWithGoogle: () => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   sendPasswordResetEmail: (email: string) => Promise<{ error: Error | null }>;
   loadSubscription: () => Promise<void>;
@@ -17,6 +24,7 @@ interface AuthContextProps {
   isAuthenticated: boolean;
   canPerformSearch: boolean;
   remainingQueries: number;
+  authProvider: AuthProvider | null;
 }
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
@@ -26,6 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [authProvider, setAuthProvider] = useState<AuthProvider | null>(null);
 
   // Check if the user can perform a search based on subscription status
   const canPerformSearch = !subscription ? false : 
@@ -47,6 +56,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Determine authentication provider
+  const determineAuthProvider = (user: User | null) => {
+    if (!user) {
+      setAuthProvider(null);
+      return;
+    }
+    
+    // Check if the user authenticated with Google
+    const isGoogleAuth = user.app_metadata?.provider === 'google' || 
+                         user.identities?.some(identity => identity.provider === 'google');
+    
+    setAuthProvider(isGoogleAuth ? AuthProvider.GOOGLE : AuthProvider.EMAIL);
+    info('Auth provider determined:', isGoogleAuth ? 'Google' : 'Email');
+  };
+
   // Initialize the auth context
   useEffect(() => {
     const initAuth = async () => {
@@ -63,6 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session) {
           setSession(session);
           setUser(session.user);
+          determineAuthProvider(session.user);
           await loadSubscription();
           info('User authenticated:', session.user.id);
         }
@@ -80,9 +105,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async (event, session) => {
         debug('Auth state changed:', event);
         setSession(session);
-        setUser(session?.user ?? null);
+        const user = session?.user ?? null;
+        setUser(user);
+        determineAuthProvider(user);
         
-        if (session?.user) {
+        if (user) {
           await loadSubscription();
         } else {
           setSubscription(null);
@@ -94,6 +121,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       authListener.subscription.unsubscribe();
     };
   }, []);
+
+  // Sign in with Google
+  const handleSignInWithGoogle = async () => {
+    try {
+      const { error: signInError } = await signInWithGoogle();
+
+      if (signInError) {
+        error('Google sign in error:', signInError);
+        return { error: signInError };
+      }
+
+      info('Redirecting to Google for authentication');
+      return { error: null };
+    } catch (err) {
+      error('Google sign in exception:', err);
+      return { error: err instanceof Error ? err : new Error('Unknown Google sign in error') };
+    }
+  };
 
   // Sign in with email and password
   const signIn = async (email: string, password: string) => {
@@ -195,13 +240,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isLoading,
     signIn,
     signUp,
+    signInWithGoogle: handleSignInWithGoogle,
     signOut,
     sendPasswordResetEmail,
     loadSubscription,
     updateUser,
     isAuthenticated: !!user,
     canPerformSearch,
-    remainingQueries
+    remainingQueries,
+    authProvider
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
