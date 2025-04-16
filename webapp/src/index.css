@@ -4,7 +4,7 @@
  
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 210 40% 98%;
     --foreground: 222.2 84% 4.9%;
  
     --muted: 210 40% 96.1%;
@@ -19,31 +19,39 @@
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
  
-    --primary: 222.2 47.4% 11.2%;
+    --primary: 221 83% 53%;
     --primary-foreground: 210 40% 98%;
  
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
  
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 221 83% 53%;
+    --accent-foreground: 210 40% 98%;
  
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
  
-    --ring: 215 20.2% 65.1%;
+    --ring: 221 83% 53%;
  
-    --radius: 0.5rem;
+    --radius: 0.75rem;
+    
+    /* Custom flight finder colors */
+    --sky-blue: 199 89% 48%;
+    --deep-blue: 221 83% 53%;
+    --light-blue: 199 89% 77%;
+    --sunset-orange: 14 100% 63%;
+    --cloud-white: 0 0% 100%;
+    --night-blue: 223 47% 11%;
   }
  
   .dark {
-    --background: 222.2 84% 4.9%;
+    --background: 223 47% 11%;
     --foreground: 210 40% 98%;
  
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
  
-    --popover: 222.2 84% 4.9%;
+    --popover: 223 47% 11%;
     --popover-foreground: 210 40% 98%;
  
     --card: 222.2 84% 4.9%;
@@ -67,12 +75,104 @@
     --ring: 217.2 32.6% 17.5%;
   }
 }
- 
+
 @layer base {
   * {
     @apply border-border;
   }
   body {
     @apply bg-background text-foreground;
+    background-image: 
+      radial-gradient(circle at top right, rgba(var(--light-blue), 0.15), transparent 250px),
+      radial-gradient(circle at left, rgba(var(--sky-blue), 0.05), transparent 250px);
+    background-attachment: fixed;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply tracking-tight;
+  }
+  
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+    border-radius: 100vh;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary) / 0.5);
+    border-radius: 100vh;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary) / 0.7);
+  }
+  
+  /* Animations */
+  @keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+    100% { transform: translateY(0px); }
+  }
+  
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  @keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+  
+  .animate-pulse-slow {
+    animation: pulse 3s ease-in-out infinite;
+  }
+  
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-out;
+  }
+  
+  .animate-slide-up {
+    animation: slideUp 0.5s ease-out;
+  }
+}
+
+/* Custom components */
+@layer components {
+  .gradient-heading {
+    @apply font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-sky-400;
+  }
+  
+  .card-highlight {
+    @apply shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1;
+  }
+  
+  .glass-effect {
+    @apply bg-white/80 backdrop-blur-md border border-white/20;
+  }
+  
+  .button-glow {
+    @apply relative overflow-hidden;
+  }
+  
+  .button-glow::after {
+    @apply content-[''] absolute inset-0 -z-10 bg-gradient-to-r from-blue-600 to-sky-400 opacity-0 transition-opacity duration-300;
+  }
+  
+  .button-glow:hover::after {
+    @apply opacity-20;
   }
 }

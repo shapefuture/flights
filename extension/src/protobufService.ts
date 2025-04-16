@@ -23,6 +23,9 @@ export interface FlightResult {
   destination: string;
   departureDate: string;
   returnDate?: string;
+  layoverAirports?: string[];
+  layoverDurations?: string[];
+  cabinClass?: string;
 }
 
 // This is a simplified implementation of Google Flights protobuf
@@ -61,7 +64,10 @@ const root = protobuf.Root.fromJSON({
         origin: { type: "string", id: 8 },
         destination: { type: "string", id: 9 },
         departureDate: { type: "string", id: 10 },
-        returnDate: { type: "string", id: 11 }
+        returnDate: { type: "string", id: 11 },
+        layoverAirports: { rule: "repeated", type: "string", id: 12 },
+        layoverDurations: { rule: "repeated", type: "string", id: 13 },
+        cabinClass: { type: "string", id: 14 }
       }
     }
   }
@@ -152,7 +158,10 @@ export function decodeFlightResponse(data: Uint8Array): FlightResult[] {
         origin: result.origin,
         destination: result.destination,
         departureDate: result.departureDate,
-        returnDate: result.returnDate
+        returnDate: result.returnDate,
+        layoverAirports: result.layoverAirports,
+        layoverDurations: result.layoverDurations,
+        cabinClass: result.cabinClass
       };
     });
   } catch (error) {

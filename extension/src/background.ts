@@ -4,6 +4,12 @@ import { fetchGoogleFlightsData, generateGoogleFlightsLink } from './googleFligh
 // Enable structured cloning for large messages
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Flight Finder Helper Extension Installed/Updated');
+  
+  // Initialize storage with version info
+  chrome.storage.local.set({ 
+    version: '0.1.0',
+    lastUpdated: new Date().toISOString()
+  });
 });
 
 // Keep track of active fetches to allow cancellation
@@ -76,20 +82,44 @@ async function processBatch(queries: FlightQuery[], tabId?: number) {
     activeFetches.push(controller);
     
     try {
-      // Use simulated data for development/testing
-      const results = await fetchFlightData(query, controller.signal);
+      // Check if we have cached results for this query
+      const cachedResults = await getCachedFlightData(query);
       
-      // Remove this controller from the active fetches
-      activeFetches = activeFetches.filter(c => c !== controller);
-      
-      // Send the results back to the web app
-      chrome.tabs.sendMessage(tabId, {
-        type: 'FETCH_RESULT',
-        payload: {
-          query,
-          results
-        }
-      });
+      if (cachedResults) {
+        console.log('Using cached results for', query);
+        
+        // Remove this controller from the active fetches
+        activeFetches = activeFetches.filter(c => c !== controller);
+        
+        // Send the cached results back to the web app
+        chrome.tabs.sendMessage(tabId, {
+          type: 'FETCH_RESULT',
+          payload: {
+            query,
+            results: cachedResults,
+            fromCache: true
+          }
+        });
+        
+      } else {
+        // Fetch fresh data
+        const results = await fetchFlightData(query, controller.signal);
+        
+        // Cache the results
+        cacheFlightData(query, results);
+        
+        // Remove this controller from the active fetches
+        activeFetches = activeFetches.filter(c => c !== controller);
+        
+        // Send the results back to the web app
+        chrome.tabs.sendMessage(tabId, {
+          type: 'FETCH_RESULT',
+          payload: {
+            query,
+            results
+          }
+        });
+      }
       
       // Add a delay before the next query to avoid rate limiting
       if (i < queries.length - 1) {
@@ -120,6 +150,48 @@ async function processBatch(queries: FlightQuery[], tabId?: number) {
   // Send batch complete message
   chrome.tabs.sendMessage(tabId, {
     type: 'BATCH_COMPLETE'
+  });
+}
+
+/**
+ * Get cached flight data for a query
+ */
+async function getCachedFlightData(query: FlightQuery): Promise<FlightResult[] | null> {
+  return new Promise((resolve) => {
+    const cacheKey = `flight_${query.origin}_${query.dest}_${query.depDate}_${query.retDate || 'oneway'}`;
+    
+    chrome.storage.local.get([cacheKey], (result) => {
+      if (result && result[cacheKey]) {
+        const cachedData = result[cacheKey];
+        
+        // Check if the cache is still valid (less than 4 hours old)
+        const cacheTime = new Date(cachedData.timestamp).getTime();
+        const now = new Date().getTime();
+        const fourHoursMs = 4 * 60 * 60 * 1000;
+        
+        if (now - cacheTime < fourHoursMs) {
+          resolve(cachedData.results);
+        } else {
+          resolve(null); // Cache expired
+        }
+      } else {
+        resolve(null); // No cache
+      }
+    });
+  });
+}
+
+/**
+ * Cache flight data for a query
+ */
+function cacheFlightData(query: FlightQuery, results: FlightResult[]): void {
+  const cacheKey = `flight_${query.origin}_${query.dest}_${query.depDate}_${query.retDate || 'oneway'}`;
+  
+  chrome.storage.local.set({
+    [cacheKey]: {
+      results,
+      timestamp: new Date().toISOString()
+    }
   });
 }
 
@@ -202,6 +274,38 @@ function generateMockResults(query: FlightQuery): FlightResult[] {
     const arrivalMinute = (departureMinute + durationMinutes) % 60;
     const arrivalFormatted = `${arrivalHour.toString().padStart(2, '0')}:${arrivalMinute.toString().padStart(2, '0')}`;
     
+    // Generate layover airports and durations if there are stops
+    let layoverAirports: string[] = [];
+    let layoverDurations: string[] = [];
+    
+    if (stops > 0) {
+      const allAirports = ['ATL', 'ORD', 'DFW', 'DEN', 'FRA', 'AMS', 'CDG', 'MAD', 'DXB'];
+      
+      for (let j = 0; j < stops; j++) {
+        // Choose a random airport that's not the origin or destination
+        let layoverAirport;
+        do {
+          layoverAirport = allAirports[Math.floor(Math.random() * allAirports.length)];
+        } while (layoverAirport === query.origin || layoverAirport === query.dest || layoverAirports.includes(layoverAirport));
+        
+        layoverAirports.push(layoverAirport);
+        
+        // Generate a random layover duration (30m-3h)
+        const layoverMinutes = Math.floor(Math.random() * 150) + 30;
+        layoverDurations.push(
+          layoverMinutes >= 60 
+            ? `${Math.floor(layoverMinutes / 60)}h ${layoverMinutes % 60}m` 
+            : `${layoverMinutes}m`
+        );
+      }
+    }
+    
+    // Choose a cabin class based on query or random
+    const cabinClasses = ['Economy', 'Premium Economy', 'Business', 'First'];
+    const cabinClass = query.cabinClass 
+      ? query.cabinClass.charAt(0).toUpperCase() + query.cabinClass.slice(1) 
+      : cabinClasses[Math.floor(Math.random() * cabinClasses.length)];
+    
     results.push({
       price: `$${price}`,
       duration: `${durationHours}h ${durationMinutes}m`,
@@ -212,7 +316,10 @@ function generateMockResults(query: FlightQuery): FlightResult[] {
       origin: query.origin,
       destination: query.dest,
       departureDate: query.depDate,
-      returnDate: query.retDate
+      returnDate: query.retDate,
+      layoverAirports: stops > 0 ? layoverAirports : undefined,
+      layoverDurations: stops > 0 ? layoverDurations : undefined,
+      cabinClass
     });
   }
   

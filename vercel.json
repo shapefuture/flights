@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "name": "flight-finder-agent",
+  "builds": [
+    { "src": "webapp/package.json", "use": "@vercel/static-build" },
+    { "src": "proxy/api/**/*.{js,ts}", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "proxy/api/$1" },
+    { "src": "/(.*)", "dest": "webapp/$1" }
+  ],
+  "env": {
+    "OPENROUTER_API_KEY": "@openrouter-api-key"
+  }
+}
