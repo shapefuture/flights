@@ -6,6 +6,14 @@ const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Define AuthError for test mocking
+export class AuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AuthError';
+  }
+}
+
 // Named export for incrementQueriesUsed function
 export const incrementQueriesUsed = async (userId: string): Promise<void> => {
   if (!userId) return;
@@ -23,7 +31,8 @@ export const incrementQueriesUsed = async (userId: string): Promise<void> => {
 // Default export for backward compatibility
 const supabaseClient = {
   client: supabase,
-  incrementQueriesUsed
+  incrementQueriesUsed,
+  AuthError
 };
 
 export default supabaseClient;

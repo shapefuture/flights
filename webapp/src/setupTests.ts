@@ -1,104 +1,122 @@
+// setupTests.ts - Configuration for Vitest and Jest test environments
+
+// Import necessary test libraries
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
-import React from 'react';
+import { vi, expect, afterEach } from 'vitest';
+import { cleanup } from '@testing-library/react';
 
-// Ensure globals are defined
-global.describe = vi.describe;
-global.it = vi.it;
-global.expect = vi.expect;
-global.beforeEach = vi.beforeEach;
-global.afterEach = vi.afterEach;
-global.beforeAll = vi.beforeAll;
-global.afterAll = vi.afterAll;
-global.jest = vi;
+// Set up global mocks
+const globalMock = globalThis as any;
 
-// Mock any browser APIs that might not be available in the test environment
-global.fetch = vi.fn().mockImplementation(() => 
-  Promise.resolve({
-    ok: true,
-    json: () => Promise.resolve({}),
-    text: () => Promise.resolve(''),
-    status: 200,
-    statusText: 'OK',
-    headers: new Headers()
-  })
-);
+// Setup vitest globals as Jest globals for compatibility
+globalMock.jest = vi;
+globalMock.jest.spyOn = vi.spyOn;
+globalMock.jest.fn = vi.fn;
+globalMock.jest.mock = vi.mock;
 
-// Mock logger to prevent console spam during tests
-vi.mock('./utils/logger');
+// Setup afterAll if it doesn't exist (for Jest compatibility)
+if (!globalMock.afterAll) {
+  globalMock.afterAll = vi.afterAll || ((fn) => fn());
+}
+
+// Mock fetch API
+globalMock.fetch = vi.fn();
+
+// Automatically clean up after each test
+afterEach(() => {
+  cleanup();
+  vi.resetAllMocks();
+});
 
 // Mock Supabase
-vi.mock('@supabase/supabase-js', () => {
-  return {
-    createClient: () => ({
-      auth: {
-        getSession: () => Promise.resolve({ data: { session: null }, error: null }),
-        signInWithOAuth: vi.fn(),
-        signOut: vi.fn(),
-        onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
-      },
-      from: () => ({
-        select: () => ({
-          eq: () => ({
-            single: () => Promise.resolve({ data: null, error: null }),
-            order: () => ({
-              limit: () => Promise.resolve({ data: [], error: null })
-            })
-          }),
-        }),
-        insert: () => Promise.resolve({ data: null, error: null }),
-        update: () => ({
-          eq: () => Promise.resolve({ data: null, error: null }),
-        }),
-        delete: () => ({
-          eq: () => Promise.resolve({ data: null, error: null }),
-        }),
-      }),
-    }),
-    Provider: {
-      GOOGLE: 'google'
-    }
-  };
-});
-
-// Mock Radix UI components
-vi.mock('@radix-ui/react-slot', () => {
-  return {
-    Slot: ({ children }) => children,
-    default: ({ children }) => children,
-  };
-});
-
-vi.mock('@radix-ui/react-slider', () => {
-  return {
-    Root: ({ children }) => React.createElement('div', null, children),
-    Track: ({ children }) => React.createElement('div', null, children),
-    Range: () => React.createElement('div'),
-    Thumb: () => React.createElement('div'),
-  };
-});
-
-vi.mock('@radix-ui/react-switch', () => {
-  return {
-    Root: ({ checked, onCheckedChange }) => React.createElement(
-      'button', 
-      { 
-        role: 'switch', 
-        'aria-checked': checked, 
-        onClick: () => onCheckedChange(!checked)
-      }
-    ),
-  };
-});
-
-// Mock React Router DOM
-vi.mock('react-router-dom');
-
-// Mock ResizeObserver which isn't available in JSDOM
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: vi.fn(() => ({
+    auth: {
+      signUp: vi.fn(),
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+      getSession: vi.fn(() => ({ data: { session: null }, error: null })),
+      onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
+    },
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          single: vi.fn(() => ({ data: null, error: null })),
+          maybeSingle: vi.fn(() => ({ data: null, error: null })),
+        })),
+      })),
+      insert: vi.fn(() => ({ select: vi.fn(() => ({ single: vi.fn() })) })),
+      update: vi.fn(() => ({ eq: vi.fn() })),
+      delete: vi.fn(() => ({ eq: vi.fn() })),
+    })),
+    rpc: vi.fn(() => ({ data: null, error: null })),
+  })),
 }));
 
-// Add any other test setup here
+// Mock react-router-dom
+vi.mock('react-router-dom', () => ({
+  useNavigate: vi.fn(() => vi.fn()),
+  useLocation: vi.fn(() => ({ pathname: '/', search: '', hash: '', state: null })),
+  useParams: vi.fn(() => ({})),
+  Link: ({ children, to, ...props }) => React.createElement('a', { href: to, ...props }, children),
+  Outlet: ({ children }) => React.createElement('div', { 'data-testid': 'outlet' }, children),
+  Navigate: ({ to }) => React.createElement('div', { 'data-testid': 'navigate', to }, null),
+  BrowserRouter: ({ children }) => React.createElement('div', { 'data-testid': 'browser-router' }, children),
+  Routes: ({ children }) => React.createElement('div', { 'data-testid': 'routes' }, children),
+  Route: () => null,
+}));
+
+// Mock localStorage
+const localStorageMock = (() => {
+  let store: Record<string, string> = {};
+  return {
+    getItem: vi.fn((key: string) => store[key] || null),
+    setItem: vi.fn((key: string, value: string) => {
+      store[key] = value.toString();
+    }),
+    removeItem: vi.fn((key: string) => {
+      delete store[key];
+    }),
+    clear: vi.fn(() => {
+      store = {};
+    }),
+  };
+})();
+
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock,
+});
+
+// Mock sessionStorage
+Object.defineProperty(window, 'sessionStorage', {
+  value: localStorageMock,
+});
+
+// Mock matchMedia
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn().mockImplementation(query => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+});
+
+// Mock window.URL.createObjectURL
+Object.defineProperty(URL, 'createObjectURL', {
+  value: vi.fn(),
+});
+
+// Mock ResizeObserver
+globalMock.ResizeObserver = class ResizeObserver {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+};
+
+export {};
