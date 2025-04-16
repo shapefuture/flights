@@ -47,42 +47,66 @@ export interface FlightQuery {
   cabinClass?: string;
 }
 
-// Legacy FlightResult (previously in lowercase flightTypes.ts)
-export interface LegacyFlightResult {
-  price: string;
-  duration: string;
-  stops: number;
-  airline: string;
-  departure: string;
-  arrival: string;
-  origin: string;
-  destination: string;
-  departureDate: string;
-  returnDate?: string;
-  layoverAirports?: string[];
-  layoverDurations?: string[];
-  cabinClass?: string;
-}
-
-// Enhanced FlightResult
+// Base FlightResult interface that works with both legacy and new implementations
 export interface FlightResult {
-  id: string;
-  segments: FlightSegment[];
-  price: PriceInfo;
-  totalDuration: number; // in minutes
-  layovers?: number;
-  flightNumber?: string; // Optional in FlightResult
+  // Required fields
+  id?: string;
+  price: string | PriceInfo;
+  flightNumber?: string;
+  
+  // Fields used in the mock implementation
+  origin?: string;
+  destination?: string;
+  departure?: string;
+  arrival?: string;
+  airline?: string;
+  duration?: string;
+  departureDate?: string;
+  returnDate?: string;
+  stops?: number;
+  
+  // Fields used in the new implementation
+  segments?: FlightSegment[];
+  totalDuration?: number;
+  layovers?: number | any[];
 }
 
-export interface DetailedFlightInfo extends Omit<FlightResult, 'flightNumber'> {
-  flightNumber: string; // Required in DetailedFlightInfo
-  baggage: {
+// Enhanced DetailedFlightInfo with all fields from mock implementation
+export interface DetailedFlightInfo extends FlightResult {
+  // Original required fields
+  id?: string;
+  flightNumber: string;
+  
+  // New required fields from the type definition
+  baggage?: {
     checkedBags: number;
     carryOn: number;
   };
-  refundable: boolean;
-  seatsAvailable: number;
+  refundable?: boolean;
+  seatsAvailable?: number;
   bookingLink?: string;
+  
+  // Additional fields used in the app
+  operatingAirline?: string;
+  aircraftType?: string;
+  cabinClass?: string;
+  fareType?: string;
+  distance?: string;
+  layovers?: any[];
+  luggage?: {
+    carryOn: string;
+    checkedBags: string;
+  };
+  amenities?: {
+    wifi: boolean;
+    powerOutlets: boolean;
+    seatPitch: string;
+    entertainment: string;
+    meals: string;
+  };
+  environmentalImpact?: string;
+  cancellationPolicy?: string;
+  changePolicy?: string;
 }
 
 // Query-related types

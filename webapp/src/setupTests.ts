@@ -1,28 +1,45 @@
-// setupTests.ts - Configuration for Vitest and Jest test environments
+// setupTests.ts - Setup for testing environment
 
-// Import necessary test libraries
+import { expect, afterEach, vi } from 'vitest';
 import '@testing-library/jest-dom';
-import { vi, expect, afterEach } from 'vitest';
 import { cleanup } from '@testing-library/react';
+import React from 'react';
 
-// Set up global mocks
-const globalMock = globalThis as any;
+// Setup global mocks
+global.React = React;
 
-// Setup vitest globals as Jest globals for compatibility
-globalMock.jest = vi;
-globalMock.jest.spyOn = vi.spyOn;
-globalMock.jest.fn = vi.fn;
-globalMock.jest.mock = vi.mock;
+// Create mock for fetch
+global.fetch = vi.fn();
 
-// Setup afterAll if it doesn't exist (for Jest compatibility)
-if (!globalMock.afterAll) {
-  globalMock.afterAll = vi.afterAll || ((fn) => fn());
+// Create mock for localStorage
+const localStorageMock = {
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
+}; 
+global.localStorage = localStorageMock as any;
+
+// Create mock for sessionStorage
+global.sessionStorage = { ...localStorageMock } as any;
+
+// Create mock for SpeechRecognition
+global.SpeechRecognition = vi.fn(() => ({
+  start: vi.fn(),
+  stop: vi.fn(),
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+}));
+global.webkitSpeechRecognition = global.SpeechRecognition;
+
+// Setup afterAll for Vitest
+if (!global.afterAll) {
+  global.afterAll = (fn) => {
+    fn();
+  }
 }
 
-// Mock fetch API
-globalMock.fetch = vi.fn();
-
-// Automatically clean up after each test
+// Cleanup after each test
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
@@ -65,58 +82,5 @@ vi.mock('react-router-dom', () => ({
   Routes: ({ children }) => React.createElement('div', { 'data-testid': 'routes' }, children),
   Route: () => null,
 }));
-
-// Mock localStorage
-const localStorageMock = (() => {
-  let store: Record<string, string> = {};
-  return {
-    getItem: vi.fn((key: string) => store[key] || null),
-    setItem: vi.fn((key: string, value: string) => {
-      store[key] = value.toString();
-    }),
-    removeItem: vi.fn((key: string) => {
-      delete store[key];
-    }),
-    clear: vi.fn(() => {
-      store = {};
-    }),
-  };
-})();
-
-Object.defineProperty(window, 'localStorage', {
-  value: localStorageMock,
-});
-
-// Mock sessionStorage
-Object.defineProperty(window, 'sessionStorage', {
-  value: localStorageMock,
-});
-
-// Mock matchMedia
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation(query => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
-});
-
-// Mock window.URL.createObjectURL
-Object.defineProperty(URL, 'createObjectURL', {
-  value: vi.fn(),
-});
-
-// Mock ResizeObserver
-globalMock.ResizeObserver = class ResizeObserver {
-  observe = vi.fn();
-  unobserve = vi.fn();
-  disconnect = vi.fn();
-};
 
 export {};

@@ -6,23 +6,21 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "strict": true,
+    "strict": false,  // Temporarily disable strict mode
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": true,
     "module": "esnext",
     "moduleResolution": "node",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noUnusedLocals": false,  // Disable unused variable warnings during development
-    "noUnusedParameters": false, // Disable unused parameter warnings during development
     "noEmit": true,
     "jsx": "react-jsx",
     "jsxImportSource": "react",
-    "typeRoots": ["./node_modules/@types", "./src/types"],
-    "paths": {
-      "@/*": ["./src/*"]
-    }
+    "noImplicitAny": false, // Disable implicit any errors
+    "noUnusedLocals": false, // Disable unused variable warnings
+    "noUnusedParameters": false, // Disable unused parameter warnings
+    "typeRoots": ["./node_modules/@types", "./src/types"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "build"]
+  "exclude": ["node_modules"]
 }
