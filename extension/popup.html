@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flight Finder Helper</title>
+  <style>
+    body {
+      width: 320px;
+      padding: 16px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    h1 {
+      font-size: 18px;
+      margin-top: 0;
+    }
+    .status {
+      margin: 12px 0;
+      padding: 8px;
+      border-radius: 4px;
+      background-color: #f0f9ff;
+      border: 1px solid #bae6fd;
+    }
+    .status.active {
+      background-color: #dcfce7;
+      border: 1px solid #86efac;
+    }
+    footer {
+      margin-top: 16px;
+      font-size: 12px;
+      color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+  <h1>Flight Finder Helper</h1>
+  
+  <div id="status" class="status active">
+    <p><strong>Status:</strong> <span id="status-text">Active</span></p>
+  </div>
+  
+  <div>
+    <p>This extension enhances the Flight Finder web app by enabling real-time data fetching from Google Flights.</p>
+  </div>
+  
+  <footer>
+    <p>Version 0.1.0</p>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>
