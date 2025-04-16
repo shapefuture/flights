@@ -35,6 +35,36 @@ export interface FlightSegment {
   cabin: string;
 }
 
+// Simplified FlightQuery interface (from the original flightTypes.ts)
+export interface FlightQuery {
+  origin: string;
+  dest: string;
+  depDate: string;
+  retDate?: string;
+  numAdults?: number;
+  numChildren?: number;
+  numInfants?: number;
+  cabinClass?: string;
+}
+
+// Legacy FlightResult (previously in lowercase flightTypes.ts)
+export interface LegacyFlightResult {
+  price: string;
+  duration: string;
+  stops: number;
+  airline: string;
+  departure: string;
+  arrival: string;
+  origin: string;
+  destination: string;
+  departureDate: string;
+  returnDate?: string;
+  layoverAirports?: string[];
+  layoverDurations?: string[];
+  cabinClass?: string;
+}
+
+// Enhanced FlightResult
 export interface FlightResult {
   id: string;
   segments: FlightSegment[];
@@ -64,12 +94,15 @@ export interface DateRange {
 export interface QueryParameters {
   origins: string[];
   destinations: string[];
-  departureDateRange: DateRange;
-  returnDateRange?: DateRange;
+  departureDateRange: DateRange | string;
+  returnDateRange?: DateRange | string;
   cabinClass?: 'economy' | 'premium_economy' | 'business' | 'first';
   adults?: number;
+  numAdults?: number; // Alias for backward compatibility
   children?: number;
+  numChildren?: number; // Alias for backward compatibility
   infants?: number;
+  numInfants?: number; // Alias for backward compatibility
   directOnly?: boolean;
   maxStops?: number;
   maxPrice?: number;

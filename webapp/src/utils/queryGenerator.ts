@@ -1,5 +1,5 @@
 import logger from './logger';
-import { FlightQuery } from '../types/flightTypes';
+import { FlightQuery } from '../types/FlightTypes';
 
 // Define error class for query generator
 export class QueryGeneratorError extends Error {
