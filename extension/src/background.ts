@@ -249,6 +249,21 @@ function generateMockResults(query: FlightQuery): FlightResult[] {
   // Generate a random number of results (3-8)
   const numResults = Math.floor(Math.random() * 6) + 3;
   
+  // Consider user preferences when generating mock results
+  const directFlightsOnly = query.directFlightsOnly === true || query.maxStops === 0;
+  const maxStops = query.maxStops !== undefined ? query.maxStops : 2;
+  const preferredAirlines = query.preferredAirlines || [];
+  const hasLuggagePreference = query.luggagePreference !== undefined;
+  const hasSeatPreference = query.seatPreference !== undefined;
+  const isRefundable = query.refundable === true;
+  
+  // Available cabin classes
+  const cabinClasses = ['economy', 'premium_economy', 'business', 'first'];
+  // Available airlines
+  const airlines = ['Delta', 'American Airlines', 'United', 'JetBlue', 'British Airways', 'Lufthansa', 'Air France'];
+  // Available fare types
+  const fareTypes = ['Basic Economy', 'Economy', 'Economy Flex', 'Premium Economy', 'Business', 'First'];
+  
   for (let i = 0; i < numResults; i++) {
     // Generate a random price between $200 and $1500
     const price = Math.floor(Math.random() * 1300) + 200;
@@ -257,12 +272,22 @@ function generateMockResults(query: FlightQuery): FlightResult[] {
     const durationHours = Math.floor(Math.random() * 12) + 2;
     const durationMinutes = Math.floor(Math.random() * 60);
     
-    // Generate a random number of stops (0-2)
-    const stops = Math.floor(Math.random() * 3);
+    // Generate random number of stops (respecting maxStops preference)
+    let stops = Math.floor(Math.random() * 3);
+    if (directFlightsOnly) {
+      stops = 0;
+    } else if (stops > maxStops) {
+      stops = maxStops;
+    }
     
-    // Choose a random airline
-    const airlines = ['Delta', 'American Airlines', 'United', 'JetBlue', 'British Airways', 'Lufthansa', 'Air France'];
-    const airline = airlines[Math.floor(Math.random() * airlines.length)];
+    // Choose airline (consider preferred airlines if specified)
+    let airline;
+    if (preferredAirlines.length > 0 && Math.random() > 0.3) {
+      // 70% chance to use preferred airline if specified
+      airline = preferredAirlines[Math.floor(Math.random() * preferredAirlines.length)];
+    } else {
+      airline = airlines[Math.floor(Math.random() * airlines.length)];
+    }
     
     // Generate random departure time
     const departureHour = Math.floor(Math.random() * 24);
@@ -300,11 +325,74 @@ function generateMockResults(query: FlightQuery): FlightResult[] {
       }
     }
     
-    // Choose a cabin class based on query or random
-    const cabinClasses = ['Economy', 'Premium Economy', 'Business', 'First'];
+    // Choose a cabin class
     const cabinClass = query.cabinClass 
-      ? query.cabinClass.charAt(0).toUpperCase() + query.cabinClass.slice(1) 
-      : cabinClasses[Math.floor(Math.random() * cabinClasses.length)];
+      ? query.cabinClass.charAt(0).toUpperCase() + query.cabinClass.slice(1).replace('_', ' ')
+      : cabinClasses[Math.floor(Math.random() * cabinClasses.length)].charAt(0).toUpperCase() + 
+        cabinClasses[Math.floor(Math.random() * cabinClasses.length)].slice(1).replace('_', ' ');
+    
+    // Generate fare type
+    const fareTypeIndex = Math.min(
+      Math.floor(Math.random() * fareTypes.length),
+      cabinClasses.indexOf(cabinClass.toLowerCase().replace(' ', '_')) + 2
+    );
+    const fareType = fareTypes[fareTypeIndex];
+    
+    // Generate luggage allowance (respect luggage preferences)
+    const checkedBags = hasLuggagePreference && query.luggagePreference?.checkedBags !== undefined
+      ? Math.max(query.luggagePreference.checkedBags, Math.floor(Math.random() * 3))
+      : Math.floor(Math.random() * 3);
+      
+    const carryOn = hasLuggagePreference && query.luggagePreference?.carryOn !== undefined
+      ? query.luggagePreference.carryOn
+      : Math.random() > 0.2; // 80% chance for carry-on
+      
+    const personalItem = hasLuggagePreference && query.luggagePreference?.personalItem !== undefined
+      ? query.luggagePreference.personalItem
+      : Math.random() > 0.1; // 90% chance for personal item
+    
+    // Generate amenities
+    const hasWifi = Math.random() > 0.4; // 60% chance
+    const hasPower = Math.random() > 0.3; // 70% chance
+    const hasEntertainment = Math.random() > 0.5; // 50% chance
+    
+    const mealOptions = ['none', 'snack', 'full'];
+    const meal = mealOptions[Math.floor(Math.random() * mealOptions.length)];
+    
+    const legroomOptions = ['standard', 'extra', 'premium'];
+    // If user prefers extra legroom, increase chances of including it
+    let legroom;
+    if (hasSeatPreference && query.seatPreference?.extraLegroom) {
+      legroom = Math.random() > 0.3 ? 'extra' : 'premium';
+    } else {
+      legroom = legroomOptions[Math.floor(Math.random() * legroomOptions.length)];
+    }
+    
+    // Generate cancellation policy (respect refundable preference)
+    const cancellationPolicyOptions = ['non-refundable', 'partial', 'refundable'];
+    let cancellationPolicy;
+    if (isRefundable) {
+      // If user wants refundable tickets, provide those
+      cancellationPolicy = 'refundable';
+    } else {
+      cancellationPolicy = cancellationPolicyOptions[Math.floor(Math.random() * cancellationPolicyOptions.length)];
+    }
+    
+    // Generate other details
+    const flightNumbers = [`${airline.substring(0, 2).toUpperCase()}${Math.floor(Math.random() * 1000) + 100}`];
+    const departureTerminal = String.fromCharCode(65 + Math.floor(Math.random() * 5));
+    const arrivalTerminal = String.fromCharCode(65 + Math.floor(Math.random() * 5));
+    const onTimePerformance = Math.floor(Math.random() * 30) + 70; // 70-99%
+    
+    // Generate change fee based on cancellation policy
+    let changeFee: string;
+    if (cancellationPolicy === 'refundable') {
+      changeFee = '$0';
+    } else if (cancellationPolicy === 'partial') {
+      changeFee = `$${Math.floor(Math.random() * 10) * 25 + 50}`; // $50-$250
+    } else {
+      changeFee = `$${Math.floor(Math.random() * 5) * 50 + 200}`; // $200-$400
+    }
     
     results.push({
       price: `$${price}`,
@@ -319,7 +407,31 @@ function generateMockResults(query: FlightQuery): FlightResult[] {
       returnDate: query.retDate,
       layoverAirports: stops > 0 ? layoverAirports : undefined,
       layoverDurations: stops > 0 ? layoverDurations : undefined,
-      cabinClass
+      cabinClass,
+      // Add enhanced properties
+      luggageAllowance: {
+        checkedBags,
+        carryOn,
+        personalItem
+      },
+      fareType,
+      amenities: {
+        wifi: hasWifi,
+        power: hasPower,
+        entertainment: hasEntertainment,
+        meal,
+        legroom
+      },
+      aircraftType: ['Boeing 737', 'Airbus A320', 'Boeing 787', 'Airbus A330'][Math.floor(Math.random() * 4)],
+      flightNumbers,
+      departureTerminal,
+      arrivalTerminal,
+      seatAvailability: Math.floor(Math.random() * 50) + 1,
+      onTimePerformance,
+      changeFee,
+      cancellationPolicy,
+      loyaltyProgram: airline.split(' ')[0] + ' Miles',
+      environmentalImpact: `${Math.floor(Math.random() * 500) + 500}kg CO2`
     });
   }
   

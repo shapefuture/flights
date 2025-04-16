@@ -10,6 +10,51 @@ export interface FlightQuery {
   numChildren?: number;
   numInfants?: number;
   cabinClass?: string;
+  // Enhanced preferences
+  maxPrice?: number;
+  maxStops?: number;
+  preferredAirlines?: string[];
+  excludedAirlines?: string[];
+  luggagePreference?: LuggagePreference;
+  seatPreference?: SeatPreference;
+  mealPreference?: string;
+  minLayoverTime?: number; // In minutes
+  maxLayoverTime?: number; // In minutes
+  preferredAirports?: string[];
+  excludedAirports?: string[];
+  timePreferences?: TimePreferences;
+  flexibleDates?: boolean;
+  priorityBoarding?: boolean;
+  refundable?: boolean;
+  directFlightsOnly?: boolean;
+}
+
+// Types for luggage preferences
+export interface LuggagePreference {
+  checkedBags?: number;
+  carryOn?: boolean;
+  personalItem?: boolean;
+  extraWeight?: boolean; // For travelers needing extra baggage weight
+  sportEquipment?: string; // For special equipment like skis, golf clubs, etc.
+}
+
+// Types for seat preferences
+export interface SeatPreference {
+  position?: 'window' | 'aisle' | 'middle';
+  section?: 'front' | 'middle' | 'back' | 'emergency' | 'bulkhead';
+  extraLegroom?: boolean;
+  prefersTogether?: boolean; // For group travel, prefer seats together
+}
+
+// Types for time preferences
+export interface TimePreferences {
+  departureTimeRange?: [number, number]; // 24 hour format, e.g. [8, 12] for 8 AM to 12 PM
+  arrivalTimeRange?: [number, number];
+  returnDepartureTimeRange?: [number, number];
+  returnArrivalTimeRange?: [number, number];
+  avoidOvernight?: boolean;
+  preferWeekday?: boolean;
+  preferWeekend?: boolean;
 }
 
 // Helper function to format date to YYYY-MM-DD
@@ -87,6 +132,194 @@ function addFlexibility(date: Date, flexibility: number): Date[] {
   
   // Sort dates chronologically
   return dates.sort((a, b) => a.getTime() - b.getTime());
+}
+
+// Helper function to parse natural language preferences
+export function parsePreferences(parameters: any): Partial<FlightQuery> {
+  const preferences: Partial<FlightQuery> = {};
+  
+  // Parse cabin class with alternate forms
+  if (parameters.cabinClass) {
+    preferences.cabinClass = mapCabinClass(parameters.cabinClass);
+  }
+  
+  // Parse price constraints
+  if (parameters.maxPrice && typeof parameters.maxPrice === 'number') {
+    preferences.maxPrice = parameters.maxPrice;
+  }
+  
+  // Parse stop preferences
+  if (parameters.directFlightsOnly === true || 
+      parameters.nonstop === true || 
+      parameters.direct === true) {
+    preferences.directFlightsOnly = true;
+    preferences.maxStops = 0;
+  } else if (parameters.maxStops !== undefined) {
+    preferences.maxStops = parameters.maxStops;
+  }
+  
+  // Parse airline preferences
+  if (parameters.preferredAirlines) {
+    preferences.preferredAirlines = Array.isArray(parameters.preferredAirlines) 
+      ? parameters.preferredAirlines 
+      : [parameters.preferredAirlines];
+  }
+  
+  if (parameters.excludedAirlines) {
+    preferences.excludedAirlines = Array.isArray(parameters.excludedAirlines) 
+      ? parameters.excludedAirlines 
+      : [parameters.excludedAirlines];
+  }
+  
+  // Parse luggage preferences
+  const luggagePreference: LuggagePreference = {};
+  
+  if (parameters.checkedBags !== undefined) {
+    luggagePreference.checkedBags = parameters.checkedBags;
+  }
+  
+  if (parameters.carryOn !== undefined) {
+    luggagePreference.carryOn = parameters.carryOn;
+  }
+  
+  if (parameters.personalItem !== undefined) {
+    luggagePreference.personalItem = parameters.personalItem;
+  }
+  
+  if (parameters.extraWeight !== undefined) {
+    luggagePreference.extraWeight = parameters.extraWeight;
+  }
+  
+  if (parameters.sportEquipment) {
+    luggagePreference.sportEquipment = parameters.sportEquipment;
+  }
+  
+  // Only set if we have any luggage preferences
+  if (Object.keys(luggagePreference).length > 0) {
+    preferences.luggagePreference = luggagePreference;
+  }
+  
+  // Parse seat preferences
+  const seatPreference: SeatPreference = {};
+  
+  if (parameters.seatPosition) {
+    seatPreference.position = parameters.seatPosition;
+  }
+  
+  if (parameters.seatSection) {
+    seatPreference.section = parameters.seatSection;
+  }
+  
+  if (parameters.extraLegroom !== undefined) {
+    seatPreference.extraLegroom = parameters.extraLegroom;
+  }
+  
+  if (parameters.seatsTogether !== undefined) {
+    seatPreference.prefersTogether = parameters.seatsTogether;
+  }
+  
+  // Only set if we have any seat preferences
+  if (Object.keys(seatPreference).length > 0) {
+    preferences.seatPreference = seatPreference;
+  }
+  
+  // Parse time preferences
+  const timePreferences: TimePreferences = {};
+  
+  if (parameters.departureTimeRange) {
+    timePreferences.departureTimeRange = parameters.departureTimeRange;
+  }
+  
+  if (parameters.arrivalTimeRange) {
+    timePreferences.arrivalTimeRange = parameters.arrivalTimeRange;
+  }
+  
+  if (parameters.returnDepartureTimeRange) {
+    timePreferences.returnDepartureTimeRange = parameters.returnDepartureTimeRange;
+  }
+  
+  if (parameters.returnArrivalTimeRange) {
+    timePreferences.returnArrivalTimeRange = parameters.returnArrivalTimeRange;
+  }
+  
+  if (parameters.avoidOvernight !== undefined) {
+    timePreferences.avoidOvernight = parameters.avoidOvernight;
+  }
+  
+  if (parameters.preferWeekday !== undefined) {
+    timePreferences.preferWeekday = parameters.preferWeekday;
+  }
+  
+  if (parameters.preferWeekend !== undefined) {
+    timePreferences.preferWeekend = parameters.preferWeekend;
+  }
+  
+  // Only set if we have any time preferences
+  if (Object.keys(timePreferences).length > 0) {
+    preferences.timePreferences = timePreferences;
+  }
+  
+  // Parse other preferences
+  if (parameters.mealPreference) {
+    preferences.mealPreference = parameters.mealPreference;
+  }
+  
+  if (parameters.minLayoverTime) {
+    preferences.minLayoverTime = parameters.minLayoverTime;
+  }
+  
+  if (parameters.maxLayoverTime) {
+    preferences.maxLayoverTime = parameters.maxLayoverTime;
+  }
+  
+  if (parameters.preferredAirports) {
+    preferences.preferredAirports = Array.isArray(parameters.preferredAirports) 
+      ? parameters.preferredAirports 
+      : [parameters.preferredAirports];
+  }
+  
+  if (parameters.excludedAirports) {
+    preferences.excludedAirports = Array.isArray(parameters.excludedAirports) 
+      ? parameters.excludedAirports 
+      : [parameters.excludedAirports];
+  }
+  
+  if (parameters.flexibleDates !== undefined) {
+    preferences.flexibleDates = parameters.flexibleDates;
+  }
+  
+  if (parameters.priorityBoarding !== undefined) {
+    preferences.priorityBoarding = parameters.priorityBoarding;
+  }
+  
+  if (parameters.refundable !== undefined) {
+    preferences.refundable = parameters.refundable;
+  }
+  
+  return preferences;
+}
+
+// Helper function to map cabin class strings to standardized values
+function mapCabinClass(cabinClass: string): string {
+  const cabinClassLower = cabinClass.toLowerCase();
+  
+  if (['economy', 'coach', 'standard', 'basic'].includes(cabinClassLower)) {
+    return 'economy';
+  }
+  
+  if (['premium economy', 'premium', 'economy plus'].includes(cabinClassLower)) {
+    return 'premium_economy';
+  }
+  
+  if (['business', 'business class'].includes(cabinClassLower)) {
+    return 'business';
+  }
+  
+  if (['first', 'first class'].includes(cabinClassLower)) {
+    return 'first';
+  }
+  
+  return cabinClassLower;
 }
 
 // Main function to generate all flight queries based on parameters
@@ -183,6 +416,9 @@ export function generateQueries(parameters: any): FlightQuery[] {
       .sort((a, b) => a.getTime() - b.getTime());
   }
   
+  // Parse all preference parameters
+  const preferences = parsePreferences(parameters);
+  
   // Generate all combinations
   for (const origin of origins) {
     for (const destination of destinations) {
@@ -198,7 +434,8 @@ export function generateQueries(parameters: any): FlightQuery[] {
             numAdults: parameters.numAdults || 1,
             numChildren: parameters.numChildren || 0,
             numInfants: parameters.numInfants || 0,
-            cabinClass: parameters.cabinClass || 'economy'
+            cabinClass: parameters.cabinClass || 'economy',
+            ...preferences
           });
           continue;
         }
@@ -216,7 +453,8 @@ export function generateQueries(parameters: any): FlightQuery[] {
             numAdults: parameters.numAdults || 1,
             numChildren: parameters.numChildren || 0,
             numInfants: parameters.numInfants || 0,
-            cabinClass: parameters.cabinClass || 'economy'
+            cabinClass: parameters.cabinClass || 'economy',
+            ...preferences
           });
         }
       }

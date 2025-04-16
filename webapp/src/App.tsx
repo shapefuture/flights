@@ -8,9 +8,9 @@ import { ScrollArea } from './components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs'
 import { checkExtensionStatus, sendMessageToExtension, listenForExtensionMessages } from './services/extensionService'
 import { callAgentApi } from './services/apiService'
-import { generateQueries, FlightQuery } from './utils/queryGenerator'
+import { generateQueries, FlightQuery, LuggagePreference, SeatPreference } from './utils/queryGenerator'
 import { format, formatDistanceToNow, addMinutes, parseISO } from 'date-fns'
-import { Plane, Calendar, Clock, Zap, User, ChevronDown, Check, X, Filter, RotateCcw, Star } from 'lucide-react'
+import { Plane, Calendar, Clock, Zap, User, ChevronDown, Check, X, Filter, RotateCcw, Star, Briefcase, Coffee, Wifi } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './components/ui/tooltip'
 import { Badge } from './components/ui/badge'
 import { CalendarView } from './components/calendar-view'
@@ -32,6 +32,30 @@ interface FlightResult {
   layoverAirports?: string[];
   layoverDurations?: string[];
   cabinClass?: string;
+  // Enhanced result properties
+  luggageAllowance?: {
+    checkedBags: number;
+    carryOn: boolean;
+    personalItem: boolean;
+  };
+  fareType?: string; // economy basic, economy standard, economy flex, etc.
+  amenities?: {
+    wifi?: boolean;
+    power?: boolean;
+    entertainment?: boolean;
+    meal?: string; // 'full', 'snack', 'none'
+    legroom?: string; // 'standard', 'extra', 'premium'
+  };
+  aircraftType?: string;
+  flightNumbers?: string[];
+  arrivalTerminal?: string;
+  departureTerminal?: string;
+  seatAvailability?: number;
+  onTimePerformance?: number; // percentage of on-time arrivals
+  changeFee?: string; // fee for changing flight
+  cancellationPolicy?: string; // 'refundable', 'non-refundable', 'partial'
+  loyaltyProgram?: string;
+  environmentalImpact?: string; // CO2 emissions
 }
 
 function App() {
@@ -56,7 +80,22 @@ function App() {
     maxStops: 2,
     airlines: [] as string[],
     departureTime: [0, 24], // Hours
-    arrivalTime: [0, 24]    // Hours
+    arrivalTime: [0, 24],    // Hours
+    // Enhanced filters
+    luggageFilters: {
+      minCheckedBags: 0,
+      requiresCarryOn: false,
+      requiresPersonalItem: false
+    },
+    amenityFilters: {
+      requiresWifi: false,
+      requiresPower: false,
+      requiresEntertainment: false,
+      mealTypes: [] as string[],
+      minLegroom: 'any' as 'any' | 'standard' | 'extra' | 'premium'
+    },
+    cancellationPolicy: 'any' as 'any' | 'refundable' | 'non-refundable' | 'partial',
+    fareTypes: [] as string[]
   })
   
   // Check extension status on component mount
@@ -331,10 +370,82 @@ function App() {
       const arrHour = parseInt(flight.arrival.split(':')[0]);
       if (arrHour < filters.arrivalTime[0] || arrHour > filters.arrivalTime[1]) return false;
       
+      // Filter by luggage
+      if (filters.luggageFilters.minCheckedBags > 0 && 
+          (!flight.luggageAllowance || 
+           flight.luggageAllowance.checkedBags < filters.luggageFilters.minCheckedBags)) {
+        return false;
+      }
+      
+      if (filters.luggageFilters.requiresCarryOn && 
+          (!flight.luggageAllowance || !flight.luggageAllowance.carryOn)) {
+        return false;
+      }
+      
+      if (filters.luggageFilters.requiresPersonalItem && 
+          (!flight.luggageAllowance || !flight.luggageAllowance.personalItem)) {
+        return false;
+      }
+      
+      // Filter by amenities
+      if (filters.amenityFilters.requiresWifi && 
+          (!flight.amenities || !flight.amenities.wifi)) {
+        return false;
+      }
+      
+      if (filters.amenityFilters.requiresPower && 
+          (!flight.amenities || !flight.amenities.power)) {
+        return false;
+      }
+      
+      if (filters.amenityFilters.requiresEntertainment && 
+          (!flight.amenities || !flight.amenities.entertainment)) {
+        return false;
+      }
+      
+      if (filters.amenityFilters.mealTypes.length > 0 && 
+          (!flight.amenities || 
+           !filters.amenityFilters.mealTypes.includes(flight.amenities.meal || 'none'))) {
+        return false;
+      }
+      
+      if (filters.amenityFilters.minLegroom !== 'any' && 
+          (!flight.amenities || 
+           !flight.amenities.legroom || 
+           !meetsLegroomRequirement(flight.amenities.legroom, filters.amenityFilters.minLegroom))) {
+        return false;
+      }
+      
+      // Filter by cancellation policy
+      if (filters.cancellationPolicy !== 'any' && 
+          flight.cancellationPolicy !== filters.cancellationPolicy) {
+        return false;
+      }
+      
+      // Filter by fare type
+      if (filters.fareTypes.length > 0 && 
+          (!flight.fareType || !filters.fareTypes.includes(flight.fareType))) {
+        return false;
+      }
+      
       return true;
     });
     
     setFilteredResults(filtered);
+  };
+  
+  // Helper function to compare legroom levels
+  const meetsLegroomRequirement = (actual: string, required: string): boolean => {
+    const legroomRanking = {
+      'standard': 1,
+      'extra': 2,
+      'premium': 3
+    };
+    
+    const actualRank = legroomRanking[actual as keyof typeof legroomRanking] || 0;
+    const requiredRank = legroomRanking[required as keyof typeof legroomRanking] || 0;
+    
+    return actualRank >= requiredRank;
   };
   
   const saveSearch = () => {
@@ -371,6 +482,119 @@ function App() {
   
   const stats = calculateStats();
 
+  // Function to render flight amenities
+  const renderAmenities = (flight: FlightResult) => {
+    if (!flight.amenities) return null;
+    
+    return (
+      <div className="flex items-center space-x-2 mt-1">
+        {flight.amenities.wifi && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger>
+                <Wifi className="h-3 w-3 text-blue-600" />
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>WiFi Available</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+        
+        {flight.amenities.power && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-3 w-3 text-green-600">
+                  <path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Power Outlets</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+        
+        {flight.amenities.entertainment && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-3 w-3 text-purple-600">
+                  <path d="M14 5l7 7m0 0l-7 7m7-7H3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Entertainment System</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+        
+        {flight.amenities.meal && flight.amenities.meal !== 'none' && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger>
+                <Coffee className="h-3 w-3 text-orange-600" />
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{flight.amenities.meal === 'full' ? 'Full Meal' : 'Snack Service'}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+        
+        {flight.amenities.legroom && flight.amenities.legroom !== 'standard' && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-3 w-3 text-indigo-600">
+                  <path d="M7 17l9-5-9-5v10z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{flight.amenities.legroom === 'premium' ? 'Premium Legroom' : 'Extra Legroom'}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+      </div>
+    );
+  };
+  
+  // Function to render luggage information
+  const renderLuggage = (flight: FlightResult) => {
+    if (!flight.luggageAllowance) return null;
+    
+    return (
+      <div className="flex items-center space-x-2 mt-1">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger>
+              <div className="flex items-center">
+                <Briefcase className="h-3 w-3 text-gray-600 mr-1" />
+                <span className="text-xs text-gray-600">
+                  {flight.luggageAllowance.checkedBags > 0 ? 
+                    `${flight.luggageAllowance.checkedBags}` : 
+                    '0'
+                  }
+                  {flight.luggageAllowance.carryOn ? '+1' : ''}
+                </span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>
+                {flight.luggageAllowance.checkedBags} checked {flight.luggageAllowance.checkedBags === 1 ? 'bag' : 'bags'}
+                {flight.luggageAllowance.carryOn ? ', carry-on allowed' : ''}
+                {flight.luggageAllowance.personalItem ? ', personal item allowed' : ''}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen pb-12">
       <header className="py-8 mb-8 border-b relative overflow-hidden">
@@ -389,7 +613,7 @@ function App() {
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="E.g., Find me a flight from NYC to London next weekend for under $800"
+                  placeholder="E.g., Find me a flight from NYC to London next weekend with extra legroom and at least 1 checked bag"
                   className="pr-36 glass-effect shadow-lg text-base py-6"
                   disabled={isLoading}
                 />
@@ -549,6 +773,53 @@ function App() {
                                   {generatedQueries[0].cabinClass || 'Economy'}
                                 </span>
                               </div>
+                              
+                              {/* Show additional preferences if present */}
+                              {generatedQueries[0].maxStops !== undefined && (
+                                <div className="flex items-center">
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-3 w-3 mr-1">
+                                    <path d="M5 12h14M5 12a2 2 0 104 0V6.5" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                  </svg>
+                                  Max Stops: <span className="ml-1 font-medium">
+                                    {generatedQueries[0].maxStops === 0 ? 'Nonstop' : generatedQueries[0].maxStops}
+                                  </span>
+                                </div>
+                              )}
+                              
+                              {generatedQueries[0].luggagePreference && (
+                                <div className="flex items-center">
+                                  <Briefcase className="h-3 w-3 mr-1" />
+                                  Luggage: <span className="ml-1 font-medium">
+                                    {generatedQueries[0].luggagePreference.checkedBags ? 
+                                      `${generatedQueries[0].luggagePreference.checkedBags} checked` : ''}
+                                    {generatedQueries[0].luggagePreference.carryOn ? ' + carry-on' : ''}
+                                  </span>
+                                </div>
+                              )}
+                              
+                              {generatedQueries[0].seatPreference && (
+                                <div className="flex items-center">
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-3 w-3 mr-1">
+                                    <path d="M5 5h14a2 2 0 012 2v3a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                    <path d="M5 14h14a2 2 0 012 2v3a2 2 0 01-2 2H5a2 2 0 01-2-2v-3a2 2 0 012-2z" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                  </svg>
+                                  Seat: <span className="ml-1 font-medium capitalize">
+                                    {generatedQueries[0].seatPreference.position || ''}
+                                    {generatedQueries[0].seatPreference.extraLegroom ? ', extra legroom' : ''}
+                                  </span>
+                                </div>
+                              )}
+                              
+                              {generatedQueries[0].refundable !== undefined && (
+                                <div className="flex items-center">
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-3 w-3 mr-1">
+                                    <path d="M3 10h18M7 15h.01M11 15h.01M15 15h.01M19 15h.01M7 19h.01M11 19h.01M15 19h.01M19 19h.01M20.4 19H3.6a.6.6 0 01-.6-.6V9.6a.6.6 0 01.6-.6h16.8a.6.6 0 01.6.6v8.8a.6.6 0 01-.6.6z" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                  </svg>
+                                  <span className="ml-1 font-medium">
+                                    {generatedQueries[0].refundable ? 'Refundable' : 'Non-refundable'}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -593,15 +864,25 @@ function App() {
                           </svg>
                           Fewer Stops
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => handleFeedback('Show more options')} className="flex items-center justify-center text-xs">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-3 w-3 mr-1.5">
-                            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                          More Options
+                        <Button size="sm" variant="outline" onClick={() => handleFeedback('I need to check bags for free')} className="flex items-center justify-center text-xs">
+                          <Briefcase className="h-3 w-3 mr-1.5" />
+                          Need Checked Bags
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => handleFeedback('Show earlier flights')} className="flex items-center justify-center text-xs">
-                          <Clock className="h-3 w-3 mr-1.5" />
-                          Earlier Flights
+                        <Button size="sm" variant="outline" onClick={() => handleFeedback('I want flights with extra legroom')} className="flex items-center justify-center text-xs">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-3 w-3 mr-1.5">
+                            <path d="M12 4v16m-6-10H5a2 2 0 00-2 2v5a2 2 0 002 2h14a2 2 0 002-2v-5a2 2 0 00-2-2h-1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                          Extra Legroom
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleFeedback('Show refundable flights only')} className="flex items-center justify-center text-xs">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-3 w-3 mr-1.5">
+                            <path d="M16 15v4a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2h8a2 2 0 012 2v4M17 9l5 5-5 5M21 14H9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                          Refundable Only
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleFeedback('Show flights with WiFi')} className="flex items-center justify-center text-xs">
+                          <Wifi className="h-3 w-3 mr-1.5" />
+                          WiFi Available
                         </Button>
                       </div>
                     </div>
@@ -689,13 +970,22 @@ function App() {
                                       <TableHead>Duration</TableHead>
                                       <TableHead>Departure</TableHead>
                                       <TableHead>Arrival</TableHead>
-                                      <TableHead className="text-right">Stops</TableHead>
+                                      <TableHead className="text-right">Details</TableHead>
                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
                                     {filteredResults.map((flight, i) => (
                                       <TableRow key={i} className="cursor-pointer hover:bg-blue-50/50">
-                                        <TableCell className="font-medium text-blue-600">{flight.price}</TableCell>
+                                        <TableCell className="font-medium text-blue-600">
+                                          <div>
+                                            {flight.price}
+                                            {flight.fareType && (
+                                              <div className="text-xs text-gray-500 mt-1">
+                                                {flight.fareType}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </TableCell>
                                         <TableCell>
                                           <div className="flex items-center">
                                             <div className="w-6 h-6 rounded-full bg-gray-100 mr-2 flex items-center justify-center overflow-hidden">
@@ -703,8 +993,14 @@ function App() {
                                             </div>
                                             <span>{flight.airline}</span>
                                           </div>
+                                          {renderAmenities(flight)}
                                         </TableCell>
-                                        <TableCell>{flight.duration}</TableCell>
+                                        <TableCell>
+                                          <div>
+                                            {flight.duration}
+                                            {renderLuggage(flight)}
+                                          </div>
+                                        </TableCell>
                                         <TableCell>
                                           <TooltipProvider>
                                             <Tooltip>
@@ -712,10 +1008,16 @@ function App() {
                                                 <div className="flex flex-col">
                                                   <span className="font-medium">{flight.departure}</span>
                                                   <span className="text-xs text-gray-500">{flight.origin}</span>
+                                                  {flight.departureTerminal && (
+                                                    <span className="text-xs text-gray-400">Terminal {flight.departureTerminal}</span>
+                                                  )}
                                                 </div>
                                               </TooltipTrigger>
                                               <TooltipContent>
                                                 <p>Departure: {flight.departureDate}</p>
+                                                {flight.flightNumbers && (
+                                                  <p>Flight: {flight.flightNumbers.join(', ')}</p>
+                                                )}
                                               </TooltipContent>
                                             </Tooltip>
                                           </TooltipProvider>
@@ -727,10 +1029,16 @@ function App() {
                                                 <div className="flex flex-col">
                                                   <span className="font-medium">{flight.arrival}</span>
                                                   <span className="text-xs text-gray-500">{flight.destination}</span>
+                                                  {flight.arrivalTerminal && (
+                                                    <span className="text-xs text-gray-400">Terminal {flight.arrivalTerminal}</span>
+                                                  )}
                                                 </div>
                                               </TooltipTrigger>
                                               <TooltipContent>
                                                 <p>Arrival: {flight.returnDate || flight.departureDate}</p>
+                                                {flight.onTimePerformance && (
+                                                  <p>{flight.onTimePerformance}% on-time</p>
+                                                )}
                                               </TooltipContent>
                                             </Tooltip>
                                           </TooltipProvider>
@@ -739,6 +1047,15 @@ function App() {
                                           <Badge variant={flight.stops === 0 ? "success" : flight.stops === 1 ? "outline" : "secondary"} className="ml-auto">
                                             {flight.stops === 0 ? 'Nonstop' : `${flight.stops} stop${flight.stops !== 1 ? 's' : ''}`}
                                           </Badge>
+                                          
+                                          {flight.cancellationPolicy && (
+                                            <div className="mt-1">
+                                              <Badge variant={flight.cancellationPolicy === 'refundable' ? "success" : "secondary"} className="text-[10px] ml-auto">
+                                                {flight.cancellationPolicy === 'refundable' ? 'Refundable' : 
+                                                 flight.cancellationPolicy === 'partial' ? 'Partial Refund' : 'Non-refundable'}
+                                              </Badge>
+                                            </div>
+                                          )}
                                         </TableCell>
                                       </TableRow>
                                     ))}
@@ -758,7 +1075,21 @@ function App() {
                                     maxStops: 2,
                                     airlines: [],
                                     departureTime: [0, 24],
-                                    arrivalTime: [0, 24]
+                                    arrivalTime: [0, 24],
+                                    luggageFilters: {
+                                      minCheckedBags: 0,
+                                      requiresCarryOn: false,
+                                      requiresPersonalItem: false
+                                    },
+                                    amenityFilters: {
+                                      requiresWifi: false,
+                                      requiresPower: false,
+                                      requiresEntertainment: false,
+                                      mealTypes: [],
+                                      minLegroom: 'any'
+                                    },
+                                    cancellationPolicy: 'any',
+                                    fareTypes: []
                                   })}
                                   className="mt-3"
                                 >
@@ -826,9 +1157,10 @@ function App() {
                           <div className="text-left max-w-sm mx-auto mt-6 bg-gray-50 p-3 rounded-md border text-sm text-gray-500">
                             <p className="font-medium mb-1">Example queries:</p>
                             <ul className="space-y-1 list-disc list-inside">
-                              <li>Find me a flight from NYC to London next weekend</li>
-                              <li>I need a cheap flight from SFO to Tokyo in December</li>
-                              <li>Show flights from Miami to Cancun for 4 people in March</li>
+                              <li>Find me a flight from NYC to London next weekend with extra legroom</li>
+                              <li>I need a cheap flight from SFO to Tokyo in December with at least 2 checked bags</li>
+                              <li>Show me direct flights from Miami to Cancun for 4 people in March</li>
+                              <li>Find refundable flights from DFW to Seattle with WiFi for next week</li>
                             </ul>
                           </div>
                         </div>
