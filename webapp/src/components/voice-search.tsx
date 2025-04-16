@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, Info } from 'lucide-react';
-import { Button } from './ui/button';
+import React, { useState, useRef, useEffect } from 'react';
+import { Mic, MicOff, Loader2, Info } from 'lucide-react';
 import { useVoiceRecognition } from '../hooks/use-voice-recognition';
+import { Button } from './ui/button';
+import { useToast } from './ui/use-toast';
+import { cn } from '../lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Progress } from './ui/progress';
 import { useTranslations } from '../hooks/use-translations';
@@ -17,8 +19,11 @@ export function VoiceSearch({ onSearch, onClose, open }: VoiceSearchProps) {
   const [isListening, setIsListening] = useState(false);
   const [progressValue, setProgressValue] = useState(0);
   const [showTips, setShowTips] = useState(false);
+  const [finalizedTranscript, setFinalizedTranscript] = useState('');
+  const [processingVoice, setProcessingVoice] = useState(false);
   const progressIntervalRef = useRef<number | null>(null);
   const micButtonRef = useRef<HTMLButtonElement>(null);
+  const { toast } = useToast();
   const MAX_LISTENING_TIME = 15000; // 15 seconds max listening time
   
   const {
@@ -33,11 +38,17 @@ export function VoiceSearch({ onSearch, onClose, open }: VoiceSearchProps) {
     interimResults: true,
     onResult: (result, isFinal) => {
       if (isFinal && result.trim()) {
+        setFinalizedTranscript(result);
         handleVoiceResult(result);
       }
     },
     onError: (error) => {
       console.error('Voice recognition error:', error);
+      toast({
+        title: 'Voice Recognition Error',
+        description: error.message,
+        variant: 'destructive'
+      });
       resetListening();
     },
     onEnd: () => {
@@ -112,6 +123,17 @@ export function VoiceSearch({ onSearch, onClose, open }: VoiceSearchProps) {
     }
   }, [open, isListening, stopListening]);
   
+  // Show a notification if speech recognition is not supported
+  useEffect(() => {
+    if (open && !hasRecognitionSupport) {
+      toast({
+        title: 'Speech Recognition Not Supported',
+        description: 'Your browser does not support speech recognition. Please try another browser or use text search.',
+        variant: 'destructive'
+      });
+    }
+  }, [open, hasRecognitionSupport, toast]);
+  
   const toggleListening = () => {
     if (isListening) {
       stopListening();
@@ -131,9 +153,15 @@ export function VoiceSearch({ onSearch, onClose, open }: VoiceSearchProps) {
   };
   
   const handleVoiceResult = (text: string) => {
-    onSearch(text.trim());
-    resetListening();
-    onClose();
+    setProcessingVoice(true);
+    
+    // Add a small delay to give visual feedback
+    setTimeout(() => {
+      onSearch(text.trim());
+      setProcessingVoice(false);
+      resetListening();
+      onClose();
+    }, 500);
   };
   
   if (!open) return null;
@@ -152,19 +180,14 @@ export function VoiceSearch({ onSearch, onClose, open }: VoiceSearchProps) {
         
         <div className="flex flex-col items-center py-4 space-y-4">
           {/* Microphone Button */}
-          <Button 
-            ref={micButtonRef}
-            variant="outline" 
+          <Button
+            className={`h-24 w-24 rounded-full ${isListening ? 'bg-primary text-primary-foreground animate-pulse' : ''}`}
+            variant="outline"
             size="icon"
             onClick={toggleListening}
-            disabled={!hasRecognitionSupport}
-            className={`h-24 w-24 rounded-full ${isListening ? 'bg-primary text-primary-foreground animate-pulse' : ''}`}
+            disabled={!hasRecognitionSupport || processingVoice}
           >
-            {isListening ? (
-              <MicOff className="h-10 w-10" />
-            ) : (
-              <Mic className="h-10 w-10" />
-            )}
+            {isListening ? <MicOff className="h-10 w-10" /> : <Mic className="h-10 w-10" />}
           </Button>
           
           {/* Progress Bar */}
@@ -179,9 +202,16 @@ export function VoiceSearch({ onSearch, onClose, open }: VoiceSearchProps) {
           
           {/* Transcript Display */}
           <div className="min-h-[60px] w-full p-3 border rounded-md bg-muted/30">
-            <p className="text-center">
-              {transcript || t('voice.noSpeech')}
-            </p>
+            {processingVoice ? (
+              <div className="flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-muted-foreground">Processing...</span>
+              </div>
+            ) : (
+              <p className="text-center">
+                {transcript || finalizedTranscript || t('voice.noSpeech')}
+              </p>
+            )}
           </div>
           
           {/* Error Message */}
