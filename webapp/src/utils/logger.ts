@@ -1,32 +1,31 @@
-/**
- * Logger utility for consistent logging across the application
- */
+// Simple logging utility
 
-// Named exports for logger functions
-export const debug = (message: string, ...args: any[]) => {
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`[DEBUG] ${message}`, ...args);
+// Check if we're in a production environment
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Create a logger object with basic logging methods
+const logger = {
+  debug: (...args: any[]) => {
+    if (!isProduction) {
+      console.debug('[DEBUG]', ...args);
+    }
+  },
+  
+  info: (...args: any[]) => {
+    console.info('[INFO]', ...args);
+  },
+  
+  warn: (...args: any[]) => {
+    console.warn('[WARN]', ...args);
+  },
+  
+  error: (...args: any[]) => {
+    console.error('[ERROR]', ...args);
   }
 };
 
-export const info = (message: string, ...args: any[]) => {
-  console.log(`[INFO] ${message}`, ...args);
-};
+// Export all functions individually
+export const { debug, info, warn, error } = logger;
 
-export const error = (message: string, ...args: any[]) => {
-  console.error(`[ERROR] ${message}`, ...args);
-};
-
-export const warn = (message: string, ...args: any[]) => {
-  console.warn(`[WARN] ${message}`, ...args);
-};
-
-// Default export for backward compatibility
-const logger = {
-  debug,
-  info,
-  error,
-  warn
-};
-
+// Export the logger as default
 export default logger;
