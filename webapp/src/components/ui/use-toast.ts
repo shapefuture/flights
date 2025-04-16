@@ -8,6 +8,7 @@ type ToastProps = {
   title?: string
   description?: string
   action?: React.ReactNode
+  variant?: "default" | "destructive" // Added variant prop
   open: boolean
   onOpenChange: (open: boolean) => void
 }
@@ -121,6 +122,8 @@ function dispatch(action: Action) {
   })
 }
 
+type Toast = Omit<ToastProps, "id" | "open" | "onOpenChange">
+
 export function useToast() {
   const [state, setState] = useState<State>(memoryState)
 
@@ -135,7 +138,7 @@ export function useToast() {
   }, [])
 
   const toast = useCallback(
-    (props: Omit<ToastProps, "id" | "open" | "onOpenChange">) => {
+    (props: Toast) => {
       const id = genId()
 
       const update = (props: ToastProps) =>
