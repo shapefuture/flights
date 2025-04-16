@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
+import React from 'react';
 
 // Ensure globals are defined
 global.describe = vi.describe;
@@ -61,27 +62,34 @@ vi.mock('@supabase/supabase-js', () => {
 });
 
 // Mock Radix UI components
-vi.mock('@radix-ui/react-slot', () => ({
-  Slot: ({ children }: { children: React.ReactNode }) => children,
-  default: ({ children }: { children: React.ReactNode }) => children,
-}));
+vi.mock('@radix-ui/react-slot', () => {
+  return {
+    Slot: ({ children }) => children,
+    default: ({ children }) => children,
+  };
+});
 
-vi.mock('@radix-ui/react-slider', () => ({
-  Root: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  Track: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  Range: () => <div />,
-  Thumb: () => <div />,
-}));
+vi.mock('@radix-ui/react-slider', () => {
+  return {
+    Root: ({ children }) => React.createElement('div', null, children),
+    Track: ({ children }) => React.createElement('div', null, children),
+    Range: () => React.createElement('div'),
+    Thumb: () => React.createElement('div'),
+  };
+});
 
-vi.mock('@radix-ui/react-switch', () => ({
-  Root: ({ checked, onCheckedChange }: { checked: boolean; onCheckedChange: (checked: boolean) => void }) => (
-    <button 
-      role="switch" 
-      aria-checked={checked} 
-      onClick={() => onCheckedChange(!checked)}
-    />
-  ),
-}));
+vi.mock('@radix-ui/react-switch', () => {
+  return {
+    Root: ({ checked, onCheckedChange }) => React.createElement(
+      'button', 
+      { 
+        role: 'switch', 
+        'aria-checked': checked, 
+        onClick: () => onCheckedChange(!checked)
+      }
+    ),
+  };
+});
 
 // Mock React Router DOM
 vi.mock('react-router-dom');

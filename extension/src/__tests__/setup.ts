@@ -10,28 +10,34 @@ global.beforeAll = beforeAll;
 global.afterAll = afterAll;
 global.vi = vi;
 
-// Mock chrome API
+// Mock chrome API with mock functions properly configured
+const mockAddListener = vi.fn();
+const mockSendMessage = vi.fn();
+const mockGet = vi.fn().mockImplementation((keys, callback) => {
+  if (callback) callback({});
+  return Promise.resolve({});
+});
+const mockSet = vi.fn().mockImplementation((data, callback) => {
+  if (callback) callback();
+  return Promise.resolve();
+});
+
+// Setup chrome API mock with proper structure
 global.chrome = {
   runtime: {
     onInstalled: {
-      addListener: vi.fn()
+      addListener: mockAddListener
     },
     onMessageExternal: {
-      addListener: vi.fn()
+      addListener: mockAddListener
     },
     getManifest: vi.fn(() => ({ version: '0.1.0' })),
     lastError: null
   },
   storage: {
     local: {
-      get: vi.fn().mockImplementation((keys, callback) => {
-        if (callback) callback({});
-        return Promise.resolve({});
-      }),
-      set: vi.fn().mockImplementation((data, callback) => {
-        if (callback) callback();
-        return Promise.resolve();
-      }),
+      get: mockGet,
+      set: mockSet,
       getBytesInUse: vi.fn().mockImplementation((keys, callback) => {
         if (callback) callback(0);
         return Promise.resolve(0);
@@ -39,9 +45,14 @@ global.chrome = {
     }
   },
   tabs: {
-    sendMessage: vi.fn()
+    sendMessage: mockSendMessage
   }
 };
+
+// Set calls array to be accessible in tests
+chrome.runtime.onInstalled.addListener.mock.calls = [];
+chrome.runtime.onMessageExternal.addListener.mock.calls = [];
+chrome.tabs.sendMessage.mock.calls = [];
 
 // Mock fetch API
 global.fetch = vi.fn(() => 

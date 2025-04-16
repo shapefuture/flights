@@ -10,8 +10,7 @@ export default defineConfig({
     exclude: [
       '**/node_modules/**', 
       '**/dist/**',
-      '**/setup.ts',          // Explicitly exclude setup.ts
-      '**/setup.tsx'
+      '**/setup.ts'          // Explicitly exclude setup.ts
     ]
   }
 });
