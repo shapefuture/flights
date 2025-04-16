@@ -11,6 +11,19 @@ export default defineConfig({
       '**/node_modules/**', 
       '**/dist/**',
       '**/setup.ts'          // Explicitly exclude setup.ts
-    ]
+    ],
+    coverage: {
+      provider: 'v8', // or 'c8'
+      reporter: ['text', 'json', 'html', 'lcov'],
+      reportsDirectory: './coverage',
+      exclude: [
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/coverage/**',
+        '**/__tests__/**',
+        '**/setup*.ts',
+        '**/*.d.ts'
+      ]
+    }
   }
 });

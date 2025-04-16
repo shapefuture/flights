@@ -1,19 +1,14 @@
 {
   "name": "flight-finder-proxy",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "wrangler publish",
+    "lint": "eslint src --ext ts",
+    "format": "prettier --write \"src/**/*.ts\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
-  },
-  "devDependencies": {
-    "@cloudflare/workers-types": "^4.20230518.0",
-    "@vitest/coverage-v8": "^0.34.3",
-    "typescript": "^5.0.4",
-    "vitest": "^0.34.3",
-    "wrangler": "^3.0.0"
   }
 }

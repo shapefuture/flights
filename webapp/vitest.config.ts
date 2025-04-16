@@ -6,12 +6,12 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: [resolve(__dirname, 'src/setupTests.ts')],
-    include: ['src/**/__tests__/**/*.test.{ts,tsx}', 'src/**/__tests__/**/apiService.test.ts', 'src/**/__tests__/**/queryGenerator.test.ts'], // Only include specific test files that work
+    include: ['src/**/__tests__/**/*.test.{ts,tsx}', 'src/**/__tests__/**/apiService.test.ts', 'src/**/__tests__/**/queryGenerator.test.ts'],
     exclude: [
       '**/node_modules/**', 
       '**/dist/**',
-      '**/setup.ts',          // Explicitly exclude setup.ts
-      '**/setupTests.ts',     // Explicitly exclude setupTests.ts
+      '**/setup.ts',
+      '**/setupTests.ts',
       // Temporarily exclude test files with missing dependencies
       '**/App.test.tsx',
       '**/auth-context.test.tsx',
@@ -26,7 +26,20 @@ export default defineConfig({
     ],
     mockReset: true,
     restoreMocks: true,
-    testTimeout: 10000 // Increase timeout for async tests
+    testTimeout: 10000, // Increase timeout for async tests
+    coverage: {
+      provider: 'v8', // or 'c8'
+      reporter: ['text', 'json', 'html', 'lcov'],
+      reportsDirectory: './coverage',
+      exclude: [
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/coverage/**',
+        '**/__tests__/**',
+        '**/setup*.ts',
+        '**/*.d.ts'
+      ]
+    }
   },
   resolve: {
     alias: {
