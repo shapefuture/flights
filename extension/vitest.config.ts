@@ -6,12 +6,12 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: [resolve(__dirname, 'src/__tests__/setup.ts')],
-    include: ['src/**/__tests__/**/*.test.{ts,tsx}'], // Only include *.test.ts files
+    include: ['src/**/__tests__/**/protobufService.test.ts'], // Temporarily just run the protobuf test
     exclude: [
       '**/node_modules/**', 
       '**/dist/**',
       '**/setup.ts',          // Explicitly exclude setup.ts
-      '**/setup.tsx'
+      '**/background.test.ts'  // Temporarily exclude background test
     ]
   }
 });

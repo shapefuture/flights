@@ -49,10 +49,7 @@ global.chrome = {
   }
 };
 
-// Set calls array to be accessible in tests
-chrome.runtime.onInstalled.addListener.mock.calls = [];
-chrome.runtime.onMessageExternal.addListener.mock.calls = [];
-chrome.tabs.sendMessage.mock.calls = [];
+// Don't try to set the mock.calls property directly - it's already handled by vi.fn()
 
 // Mock fetch API
 global.fetch = vi.fn(() => 
