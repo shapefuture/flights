@@ -1,17 +1,17 @@
-import { vi } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 
-// Expose Vitest globals to make tests more readable
-global.describe = vi.describe;
-global.it = vi.it;
-global.expect = vi.expect;
-global.beforeEach = vi.beforeEach;
-global.afterEach = vi.afterEach;
-global.beforeAll = vi.beforeAll;
-global.afterAll = vi.afterAll;
-global.jest = vi;
+// Expose Vitest globals
+global.describe = describe;
+global.it = it;
+global.expect = expect;
+global.beforeEach = beforeEach;
+global.afterEach = afterEach;
+global.beforeAll = beforeAll;
+global.afterAll = afterAll;
+global.vi = vi;
 
 // Mock fetch API
-global.fetch = vi.fn().mockImplementation(() => 
+global.fetch = vi.fn(() => 
   Promise.resolve({
     ok: true,
     json: () => Promise.resolve({}),
