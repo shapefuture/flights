@@ -134,7 +134,8 @@ export function useVoiceRecognition(options: VoiceRecognitionOptions = {}): UseV
   // Start listening
   const startListening = useCallback(() => {
     if (!recognition || !hasRecognitionSupport) {
-      // Fix: Changed from Error() to throwing a new Error
+      // Properly create a new Error object instead of calling error function
+      setError(new Error('Cannot start listening: Speech recognition not supported or not initialized'));
       error('Cannot start listening: Speech recognition not supported or not initialized');
       return;
     }
@@ -166,6 +167,7 @@ export function useVoiceRecognition(options: VoiceRecognitionOptions = {}): UseV
       info('Voice recognition stopped');
     } catch (err) {
       error('Error stopping voice recognition:', err);
+      setError(err instanceof Error ? err : new Error('Failed to stop voice recognition'));
     }
   }, [recognition, hasRecognitionSupport, isListening]);
   
