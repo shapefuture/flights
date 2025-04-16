@@ -1,0 +1,20 @@
+{
+  "name": "flight-finder-agent",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "workspaces": [
+    "webapp",
+    "extension",
+    "proxy"
+  ],
+  "scripts": {
+    "dev:webapp": "cd webapp && pnpm dev",
+    "dev:proxy": "cd proxy && pnpm dev",
+    "build:webapp": "cd webapp && pnpm build",
+    "build:proxy": "cd proxy && pnpm build",
+    "build:extension": "cd extension && pnpm build"
+  }
+}

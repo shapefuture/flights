@@ -1,181 +1,153 @@
-> Apparently, it's always a better approach to interact with the Internal Google APIs. I'm working on that, and I'll deliver the results soon if my experimental project works out well.
+# Flight Finder Agent
 
-<br /><br />
-<div align="center">
+A web-based flight finding tool that accepts complex natural language queries and leverages AI to find the best flights for you.
 
-# ✈️ fast-flights
+![Flight Finder Screenshot](./screenshot.png)
 
-The fast and strongly-typed Google Flights scraper (API) implemented in Python. Based on Base64-encoded Protobuf string.
+## Features
 
-[**Documentation**](https://aweirddev.github.io/flights) • [Issues](https://github.com/AWeirdDev/flights/issues) • [PyPi](https://pypi.org/project/fast-flights)
+- **Natural Language Flight Search**: Simply describe your travel needs in plain language
+- **AI-Powered Understanding**: Our agent interprets your query and creates a smart search plan
+- **Multi-Source Flight Data**: Optional browser extension fetches real-time data from Google Flights
+- **Visual Presentation**: View results in a list or calendar format with rich filtering options
+- **Saved Searches**: Store and reuse your favorite flight queries
+- **Intelligent Refinement**: Provide feedback to the agent to refine your search results
+- **Dark Mode & Mobile Optimized**: Enjoy a beautiful experience on any device at any time
+- **Google Authentication**: Quick and secure sign-in with your Google account (primary method)
+- **Email Authentication**: Traditional email & password authentication as fallback option
+- **Comprehensive Error Handling**: Robust error handling and recovery throughout the application
+- **Detailed Logging**: Structured logging with different severity levels for debugging and monitoring
+- **Subscription Management**: Different pricing tiers for casual to frequent travelers
+- **Enhanced Mobile Experience**: Touch-optimized controls for natural mobile interaction
+- **Multi-language Support**: Interface available in multiple languages
+- **Trip Planning**: Comprehensive trip management including flights, hotels, and activities
+- **Voice Interface**: Natural language voice search capabilities
 
-```haskell
-$ pip install fast-flights
-```
+## Architecture
 
-</div>
+This project follows an "Extension-Enhanced Pragmatist" architecture with Agentic Orchestration:
 
-## Basics
-**TL;DR**: To use `fast-flights`, you'll first create a filter (for `?tfs=`) to perform a request.
-Then, add `flight_data`, `trip`, `seat`, `passengers` to use the API directly.
+- **Frontend (Orchestrator Agent / UI Agent)**: React/Vite app that manages the UI, flow, and coordinates other agents
+- **Proxy (Secure Gateway)**: Serverless function that securely interfaces with the LLM
+- **LLM (Reasoning/Planning Agent)**: External LLM that interprets queries, plans steps, and provides reasoning
+- **Browser Extension (Data Agent)**: Optional component that fetches real-time flight data
+- **Authentication**: Supabase for user authentication (Google OAuth and email/password)
+- **Payments**: Stripe integration for subscription management
+- **Logging & Monitoring**: Structured logging system with error reporting and tracking
 
-```python
-from fast_flights import FlightData, Passengers, Result, get_flights
+## Getting Started
 
-result: Result = get_flights(
-    flight_data=[
-        FlightData(date="2025-01-01", from_airport="TPE", to_airport="MYJ")
-    ],
-    trip="one-way",
-    seat="economy",
-    passengers=Passengers(adults=2, children=1, infants_in_seat=0, infants_on_lap=0),
-    fetch_mode="fallback",
-)
+### Prerequisites
 
-print(result)
+- Node.js 18+ and pnpm
+- Account on OpenRouter for API access
+- Account on Supabase for authentication
+- Google OAuth client ID (for Google Sign-In)
+- Account on Stripe for payment processing
+- Account on Cloudflare/Vercel for deployment
 
-# The price is currently... low/typical/high
-print("The price is currently", result.current_price)
-```
+### Local Development
 
-**Properties & usage for `Result`**:
+1. Clone the repository: `git clone https://github.com/yourusername/flight-finder-agent.git`
+2. Install dependencies: `pnpm install`
+3. Set up environment variables:
+   - Create a `.env` file in the root directory based on `.env.example`
+   - Add your API keys for OpenRouter, Supabase, and Stripe
+   - Add your Google OAuth client ID for Google Sign-In
+4. Start the development servers:
+   - Frontend: `pnpm dev:webapp`
+   - Proxy: `pnpm dev:proxy`
+5. Load the extension in Chrome/Firefox developer mode:
+   - Navigate to chrome://extensions/
+   - Enable "Developer mode"
+   - Click "Load unpacked" and select the `/extension` directory
 
-```python
-result.current_price
+### Setting Up Google Authentication
 
-# Get the first flight
-flight = result.flights[0]
+To enable Google Sign-In, you need to:
 
-flight.is_best
-flight.name
-flight.departure
-flight.arrival
-flight.arrival_time_ahead
-flight.duration
-flight.stops
-flight.delay?  # may not be present
-flight.price
-```
+1. Create a project in the [Google Cloud Console](https://console.cloud.google.com/)
+2. Configure the OAuth consent screen
+3. Create OAuth client ID credentials for a Web Application
+4. Add your application's domain to the authorized JavaScript origins
+5. Add `https://your-domain.com/auth/callback` to the authorized redirect URIs
+6. Add the client ID to your `.env` file as `VITE_GOOGLE_CLIENT_ID`
+7. Configure Supabase authentication:
+   - Go to Authentication > Providers in your Supabase dashboard
+   - Enable Google provider
+   - Add your Google Client ID and Client Secret
+   - Set the authorized redirect URL to `https://your-supabase-project.supabase.co/auth/v1/callback`
 
-**Useless enums**: Additionally, you can use the `Airport` enum to search for airports in code (as you type)! See `_generated_enum.py` in source.
+### Building for Production
 
-```python
-Airport.TAIPEI
-              ╭─────────────────────────────────╮
-              │ TAIPEI_SONGSHAN_AIRPORT         │
-              │ TAPACHULA_INTERNATIONAL_AIRPORT │
-              │ TAMPA_INTERNATIONAL_AIRPORT     │
-              ╰─────────────────────────────────╯
-```
+1. Build all components: `pnpm build`
+2. The webapp will be available in `webapp/dist`
+3. The proxy serverless function will be in `proxy/dist`
+4. The extension files will be ready in `extension/dist`
 
-## What's new
-- `v2.0` – New (much more succinct) API, fallback support for Playwright serverless functions, and [documentation](https://aweirddev.github.io/flights)!
-- `v2.2` - Now supports **local playwright** for sending requests.
+### Deployment
 
-## Cookies & consent
-The EU region is a bit tricky to solve for now, but the fallback support should be able to handle it.
+#### Vercel Deployment
+
+1. Push your code to GitHub
+2. Connect your repository to Vercel
+3. Configure the environment variables (OPENROUTER_API_KEY, SUPABASE_URL, etc.)
+4. Deploy
+
+#### Extension Publishing
+
+1. Zip the contents of the `extension/dist` directory
+2. Upload to the Chrome Web Store and/or Firefox Add-ons marketplace
+3. Follow the browser-specific review process guidelines
+
+## Subscription Plans
+
+Flight Finder offers several subscription tiers:
+
+- **Free**: Limited searches per month
+- **Basic**: 20 searches per month, basic flight details
+- **Premium**: 100 searches per month, detailed flight information, price alerts
+- **Enterprise**: Unlimited searches, all premium features, API access
+
+## Testing
+
+This project uses Jest and React Testing Library for unit and integration tests:
+
+1. Run all tests: `pnpm test`
+2. Run with coverage: `pnpm test:coverage`
+3. Run end-to-end tests: `pnpm test:e2e`
+
+### Test Coverage
+
+The project includes comprehensive tests for all major components:
+
+- **Unit Tests**: Testing individual functions and components in isolation
+- **Integration Tests**: Testing interactions between multiple components
+- **Authentication Tests**: Specific tests for Google authentication and Supabase integration
+- **Error Handling Tests**: Tests for error scenarios and recovery
+- **Accessibility Tests**: Ensuring the application is accessible to all users
+
+## Error Handling and Logging
+
+The application implements robust error handling throughout:
+
+- **Structured Error Types**: Specific error classes for different types of errors
+- **Graceful Degradation**: The app remains functional even when parts fail
+- **User Feedback**: Clear error messages with recovery options
+- **Retry Mechanisms**: Automatic retries for transient failures
+- **Comprehensive Logging**: Different log levels for development vs. production
+
+## Project Structure
+
+- `/webapp`: Frontend React application
+- `/proxy`: Serverless proxy function
+- `/extension`: Browser extension for data fetching
+- `/docs`: Documentation files
 
 ## Contributing
-Contributing is welcomed! I probably won't work on this project unless there's a need for a major update, but boy howdy do I love pull requests.
 
-***
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-## How it's made
+## License
 
-The other day, I was making a chat-interface-based trip recommendation app and wanted to add a feature that can search for flights available for booking. My personal choice is definitely [Google Flights](https://flights.google.com) since Google always has the best and most organized data on the web. Therefore, I searched for APIs on Google.
-
-> 🔎 **Search** <br />
-> google flights api
-
-The results? Bad. It seems like they discontinued this service and it now lives in the Graveyard of Google.
-
-> <sup><a href="https://duffel.com/blog/google-flights-api" target="_blank">🧏‍♂️ <b>duffel.com</b></a></sup><br />
-> <sup><i>Google Flights API: How did it work & what happened to it?</i></b>
->
-> The Google Flights API offered developers access to aggregated airline data, including flight times, availability, and prices. Over a decade ago, Google announced the acquisition of ITA Software Inc. which it used to develop its API. **However, in 2018, Google ended access to the public-facing API and now only offers access through the QPX enterprise product**.
-
-That's awful! I've also looked for free alternatives but their rate limits and pricing are just 😬 (not a good fit/deal for everyone).
-
-<br />
-
-However, Google Flights has their UI – [flights.google.com](https://flights.google.com). So, maybe I could just use Developer Tools to log the requests made and just replicate all of that? Undoubtedly not! Their requests are just full of numbers and unreadable text, so that's not the solution.
-
-Perhaps, we could scrape it? I mean, Google allowed many companies like [Serpapi](https://google.com/search?q=serpapi) to scrape their web just pretending like nothing happened... So let's scrape our own.
-
-> 🔎 **Search** <br />
-> google flights ~~api~~ scraper pypi
-
-Excluding the ones that are not active, I came across [hugoglvs/google-flights-scraper](https://pypi.org/project/google-flights-scraper) on Pypi. I thought to myself: "aint no way this is the solution!"
-
-I checked hugoglvs's code on [GitHub](https://github.com/hugoglvs/google-flights-scraper), and I immediately detected "playwright," my worst enemy. One word can describe it well: slow. Two words? Extremely slow. What's more, it doesn't even run on the **🗻 Edge** because of configuration errors, missing libraries... etc. I could just reverse [try.playwright.tech](https://try.playwright.tech) and use a better environment, but that's just too risky if they added Cloudflare as an additional security barrier 😳.
-
-Life tells me to never give up. Let's just take a look at their URL params...
-
-```markdown
-https://www.google.com/travel/flights/search?tfs=CBwQAhoeEgoyMDI0LTA1LTI4agcIARIDVFBFcgcIARIDTVlKGh4SCjIwMjQtMDUtMzBqBwgBEgNNWUpyBwgBEgNUUEVAAUgBcAGCAQsI____________AZgBAQ&hl=en
-```
-
-| Param | Content | My past understanding |
-|-------|---------|-----------------------|
-| hl    | en      | Sets the language.    |
-| tfs   | CBwQAhoeEgoyMDI0LTA1LTI4agcIARID… | What is this???? 🤮🤮 |
-
-I removed the `?tfs=` parameter and found out that this is the control of our request! And it looks so base64-y.
-
-If we decode it to raw text, we can still see the dates, but we're not quite there — there's too much unwanted Unicode text.
-
-Or maybe it's some kind of a **data-storing method** Google uses? What if it's something like JSON? Let's look it up.
-
-> 🔎 **Search** <br />
-> google's json alternative
-
-> 🐣 **Result**<br />
-> Solution: The Power of **Protocol Buffers**
-> 
-> LinkedIn turned to Protocol Buffers, often referred to as **protobuf**, a binary serialization format developed by Google. The key advantage of Protocol Buffers is its efficiency, compactness, and speed, making it significantly faster than JSON for serialization and deserialization.
-
-Gotcha, Protobuf! Let's feed it to an online decoder and see how it does:
-
-> 🔎 **Search** <br />
-> protobuf decoder
-
-> 🐣 **Result**<br />
-> [protobuf-decoder.netlify.app](https://protobuf-decoder.netlify.app)
-
-I then pasted the Base64-encoded string to the decoder and no way! It DID return valid data!
-
-![annotated, Protobuf Decoder screenshot](https://github.com/AWeirdDev/flights/assets/90096971/77dfb097-f961-4494-be88-3640763dbc8c)
-
-I immediately recognized the values — that's my data, that's my query!
-
-So, I wrote some simple Protobuf code to decode the data.
-
-```protobuf
-syntax = "proto3"
-
-message Airport {
-    string name = 2;
-}
-
-message FlightInfo {
-    string date = 2;
-    Airport dep_airport = 13;
-    Airport arr_airport = 14;
-}
-
-message GoogleSucks {
-    repeated FlightInfo = 3;
-}
-```
-
-It works! Now, I won't consider myself an "experienced Protobuf developer" but rather a complete beginner.
-
-I have no idea what I wrote but... it worked! And here it is, `fast-flights`.
-
-***
-
-<div align="center">
-
-(c) 2024-2025 AWeirdDev, and other awesome people
-
-</div>
+This project is licensed under the MIT License - see the LICENSE file for details.

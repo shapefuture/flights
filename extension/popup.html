@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flight Finder Helper</title>
+  <style>
+    body {
+      width: 320px;
+      padding: 16px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #1e293b;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background-color: #3b82f6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .logo svg {
+      width: 20px;
+      height: 20px;
+      color: white;
+    }
+    h1 {
+      font-size: 18px;
+      margin: 0;
+      font-weight: 600;
+    }
+    .status {
+      margin: 12px 0;
+      padding: 12px;
+      border-radius: 8px;
+      background-color: #f0f9ff;
+      border: 1px solid #bae6fd;
+    }
+    .status.active {
+      background-color: #dcfce7;
+      border: 1px solid #86efac;
+    }
+    .status-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .status-header svg {
+      width: 16px;
+      height: 16px;
+    }
+    .status-header strong {
+      font-weight: 600;
+    }
+    .stats {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .stat-card {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 4px;
+    }
+    .stat-value {
+      font-weight: 600;
+      font-size: 16px;
+    }
+    footer {
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid #e2e8f0;
+      font-size: 12px;
+      color: #64748b;
+      display: flex;
+      justify-content: space-between;
+    }
+    .actions {
+      margin-top: 16px;
+    }
+    button {
+      background-color: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    button:hover {
+      background-color: #2563eb;
+    }
+    button.secondary {
+      background-color: #f1f5f9;
+      color: #334155;
+      border: 1px solid #cbd5e1;
+    }
+    button.secondary:hover {
+      background-color: #e2e8f0;
+    }
+    .flex {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .justify-between {
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>
+      </svg>
+    </div>
+    <h1>Flight Finder Helper</h1>
+  </header>
+  
+  <div id="status" class="status active">
+    <div class="status-header">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#15803d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+      </svg>
+      <strong>Status: <span id="status-text">Active</span></strong>
+    </div>
+    <p class="status-message">Extension is connected and ready to fetch flight data</p>
+  </div>
+  
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-label">Cache Size</div>
+      <div class="stat-value" id="cache-size">0 MB</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Searches Completed</div>
+      <div class="stat-value" id="searches-count">0</div>
+    </div>
+  </div>
+  
+  <div class="actions">
+    <div class="flex justify-between">
+      <button class="secondary" id="clear-cache">Clear Cache</button>
+      <button id="test-connection">Test Connection</button>
+    </div>
+  </div>
+  
+  <footer>
+    <div>Version <span id="version">0.1.0</span></div>
+    <div id="last-updated">Last updated: Just now</div>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

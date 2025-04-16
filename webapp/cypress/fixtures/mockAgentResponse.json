@@ -1,0 +1,33 @@
+{
+  "thinking": "I need to find flights from NYC to London for next weekend. NYC has multiple airports (JFK, LGA, EWR) and London has LHR and LGW. Next weekend refers to the upcoming Saturday and Sunday, so I'll need to generate queries for those dates.",
+  "plan": {
+    "steps": [
+      {
+        "action": "generate_search_queries",
+        "parameters": {
+          "origins": ["JFK", "LGA", "EWR"],
+          "destinations": ["LHR", "LGW"],
+          "departureDateRange": "next-weekend",
+          "returnDateRange": "one-week-later",
+          "numAdults": 1,
+          "numChildren": 0,
+          "numInfants": 0,
+          "cabinClass": "economy"
+        }
+      },
+      {
+        "action": "execute_flight_fetch",
+        "parameters": {
+          "useExtension": true
+        }
+      },
+      {
+        "action": "summarize_results",
+        "parameters": {
+          "sortBy": "price",
+          "limit": 10
+        }
+      }
+    ]
+  }
+}

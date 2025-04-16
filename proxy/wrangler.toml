@@ -1,0 +1,8 @@
+name = "flight-finder-proxy"
+main = "src/index.ts"
+compatibility_date = "2023-09-11"
+
+[vars]
+# Set your environment variables in the Cloudflare dashboard
+# or when deploying with the "--env" flag
+# OPENROUTER_API_KEY = ""
