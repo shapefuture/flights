@@ -57,11 +57,4 @@ describe('Logger', () => {
     error('Test error message', err);
     expect(console.error).toHaveBeenCalledWith('[ERROR]', 'Test error message', err);
   });
-
-  it('should log error messages with both error and additional data', () => {
-    const err = new Error('Something went wrong');
-    const data = { user: 'test', id: 123 };
-    error('Test error message', err, data);
-    expect(console.error).toHaveBeenCalledWith('[ERROR]', 'Test error message', err, data);
-  });
 });

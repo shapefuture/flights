@@ -4,11 +4,14 @@ import { debug, error as logError } from '../utils/logger';
 import { Session, User } from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom';
 
-// Use TypeScript 'enum' for providers
-export enum AuthProvider {
-  GOOGLE = 'google',
-  EMAIL = 'email'
-}
+// Use a type instead of an enum to avoid conflicts
+export type AuthProviderType = 'google' | 'email';
+
+// Define AuthProvider object instead of enum
+export const AuthProvider = {
+  GOOGLE: 'google' as AuthProviderType,
+  EMAIL: 'email' as AuthProviderType
+};
 
 // Subscription
 export interface UserSubscription {
@@ -31,6 +34,9 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   subscription: UserSubscription;
+  // Add missing properties needed in tests
+  isLoading?: boolean;
+  authProvider?: AuthProviderType | null;
 }
 
 const DEFAULT_SUBSCRIPTION: UserSubscription = {
@@ -49,6 +55,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [status, setStatus] = useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
   const [subscription, setSubscription] = useState<UserSubscription>(DEFAULT_SUBSCRIPTION);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [authProvider, setAuthProvider] = useState<AuthProviderType | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -56,6 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let mount = true;
     (async () => {
       setStatus('loading');
+      setIsLoading(true);
       const { data: { session }, error } = await supabase.auth.getSession();
       if (error) {
         setStatus('unauthenticated');
@@ -65,13 +74,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user || null);
         setStatus(session?.user ? 'authenticated' : 'unauthenticated');
+        // Set auth provider if user exists
+        if (session?.user) {
+          // Check auth provider (adjust this based on how your app determines provider)
+          const provider = session.user.app_metadata?.provider as AuthProviderType;
+          setAuthProvider(provider || 'email');
+        }
       }
+      setIsLoading(false);
+      
       // Set up auth state change listener
       const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(
         (event, newSession) => {
           setSession(newSession);
           setUser(newSession?.user || null);
           setStatus(newSession?.user ? 'authenticated' : 'unauthenticated');
+          // Update auth provider when auth state changes
+          if (newSession?.user) {
+            const provider = newSession.user.app_metadata?.provider as AuthProviderType;
+            setAuthProvider(provider || 'email');
+          } else {
+            setAuthProvider(null);
+          }
         }
       );
       unsub = authSub.unsubscribe;
@@ -108,6 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     setUser(null);
     setStatus('unauthenticated');
+    setAuthProvider(null);
     navigate('/');
   }
 
@@ -122,11 +147,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signOut,
       subscription,
+      isLoading,
+      authProvider,
     }}>
       {children}
     </AuthContext.Provider>
   );
 }
+
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within an AuthProvider");
