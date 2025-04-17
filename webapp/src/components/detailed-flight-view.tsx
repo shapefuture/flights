@@ -243,6 +243,7 @@ export function DetailedFlightView({
                 </div>
               )}
               
+              {/* Add a safe access check for notes */}
               {flight.notes && (
                 <div className="mt-4">
                   <h4 className="text-sm font-medium">Additional Notes</h4>

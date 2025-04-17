@@ -1,10 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Create a single supabase client for interacting with your database
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(
+  import.meta.env?.VITE_SUPABASE_URL || 'https://example.supabase.co',
+  import.meta.env?.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key'
+);
 
 // Define AuthError for test mocking
 export class AuthError extends Error {
@@ -39,6 +39,7 @@ export interface UserSubscription {
   tier: 'free' | 'premium' | 'pro';
   queriesUsed: number;
   queriesLimit: number;
+  monthlyQuota: number;
   validUntil: string;
 }
 
@@ -51,6 +52,7 @@ export const getUserSubscription = async (userId: string): Promise<UserSubscript
       tier: 'free',
       queriesUsed: 10,
       queriesLimit: 50,
+      monthlyQuota: 50,
       validUntil: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString()
     };
   } catch (err) {

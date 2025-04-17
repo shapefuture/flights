@@ -1,86 +1,105 @@
-// setupTests.ts - Setup for testing environment
-
-import { expect, afterEach, vi } from 'vitest';
+// jest-dom adds custom jest matchers for asserting on DOM nodes.
+// allows you to do things like:
+// expect(element).toHaveTextContent(/react/i)
+// learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom';
-import { cleanup } from '@testing-library/react';
-import React from 'react';
+import { vi } from 'vitest';
 
-// Setup global mocks
-global.React = React;
+// Mock supabase
+vi.mock('./lib/supabase', () => ({
+  supabase: {
+    auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session: null }, error: null }),
+      onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }),
+      signInWithOAuth: vi.fn(),
+      signInWithPassword: vi.fn(),
+      signUp: vi.fn(),
+      signOut: vi.fn()
+    }
+  },
+  incrementQueriesUsed: vi.fn(),
+  getUserSubscription: vi.fn(),
+  AuthProvider: {
+    GOOGLE: 'google',
+    EMAIL: 'email'
+  }
+}));
 
-// Create mock for fetch
-global.fetch = vi.fn();
+// Mock stripe
+vi.mock('./lib/stripe', () => ({
+  default: Promise.resolve({}),
+  getStripe: vi.fn().mockResolvedValue({}),
+  subscriptionPlans: [
+    {
+      id: 'basic',
+      name: 'Basic',
+      description: 'Basic plan',
+      features: ['Feature 1'],
+      priceMonthly: 9.99,
+      priceYearly: 99.99,
+      monthlyQuota: 20,
+      stripePriceId: {
+        monthly: 'price_123',
+        yearly: 'price_456'
+      }
+    }
+  ],
+  createCheckoutSession: vi.fn().mockResolvedValue('https://test.stripe.com'),
+  createCustomerPortalSession: vi.fn().mockResolvedValue('https://test.stripe.com')
+}));
 
-// Create mock for localStorage
-const localStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
-}; 
-global.localStorage = localStorageMock as any;
+// Setup test environment
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn().mockImplementation(query => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+});
 
-// Create mock for sessionStorage
-global.sessionStorage = { ...localStorageMock } as any;
-
-// Create mock for SpeechRecognition
-global.SpeechRecognition = vi.fn(() => ({
+// Mock window.SpeechRecognition
+global.SpeechRecognition = vi.fn().mockImplementation(() => ({
   start: vi.fn(),
   stop: vi.fn(),
   addEventListener: vi.fn(),
-  removeEventListener: vi.fn(),
+  removeEventListener: vi.fn()
 }));
-global.webkitSpeechRecognition = global.SpeechRecognition;
 
-// Setup afterAll for Vitest
-if (!global.afterAll) {
-  global.afterAll = (fn) => {
-    fn();
-  }
-}
+// Mock window.localStorage
+const localStorageMock = (function() {
+  let store: Record<string, string> = {};
+  return {
+    getItem: function(key: string) {
+      return store[key] || null;
+    },
+    setItem: function(key: string, value: string) {
+      store[key] = value.toString();
+    },
+    removeItem: function(key: string) {
+      delete store[key];
+    },
+    clear: function() {
+      store = {};
+    }
+  };
+})();
 
-// Cleanup after each test
-afterEach(() => {
-  cleanup();
-  vi.resetAllMocks();
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock
 });
 
-// Mock Supabase
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      signUp: vi.fn(),
-      signIn: vi.fn(),
-      signOut: vi.fn(),
-      getSession: vi.fn(() => ({ data: { session: null }, error: null })),
-      onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
-    },
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          single: vi.fn(() => ({ data: null, error: null })),
-          maybeSingle: vi.fn(() => ({ data: null, error: null })),
-        })),
-      })),
-      insert: vi.fn(() => ({ select: vi.fn(() => ({ single: vi.fn() })) })),
-      update: vi.fn(() => ({ eq: vi.fn() })),
-      delete: vi.fn(() => ({ eq: vi.fn() })),
-    })),
-    rpc: vi.fn(() => ({ data: null, error: null })),
-  })),
-}));
+// Set up Intersection Observer mock
+class MockIntersectionObserver {
+  constructor(callback: IntersectionObserverCallback) {}
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+}
 
-// Mock react-router-dom
-vi.mock('react-router-dom', () => ({
-  useNavigate: vi.fn(() => vi.fn()),
-  useLocation: vi.fn(() => ({ pathname: '/', search: '', hash: '', state: null })),
-  useParams: vi.fn(() => ({})),
-  Link: ({ children, to, ...props }) => React.createElement('a', { href: to, ...props }, children),
-  Outlet: ({ children }) => React.createElement('div', { 'data-testid': 'outlet' }, children),
-  Navigate: ({ to }) => React.createElement('div', { 'data-testid': 'navigate', to }, null),
-  BrowserRouter: ({ children }) => React.createElement('div', { 'data-testid': 'browser-router' }, children),
-  Routes: ({ children }) => React.createElement('div', { 'data-testid': 'routes' }, children),
-  Route: () => null,
-}));
-
-export {};
+window.IntersectionObserver = MockIntersectionObserver as any;

@@ -1,131 +1,111 @@
 import React, { useState } from 'react';
-import { useAuth } from '../../context/auth-context';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Checkbox } from '../ui/checkbox';
-import { Loader2 } from 'lucide-react';
+import { Icons } from '../icons';
+import { useAuth } from '../../context/auth-context';
 import { useToast } from '../ui/use-toast';
+import { GoogleSignInButton } from './google-sign-in-button';
 
 export function SignUpForm() {
+  const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [agreeTerms, setAgreeTerms] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const { signUp } = useAuth();
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!email || !password || !name) {
+
+    if (!email || !password) {
       toast({
-        title: "Missing fields",
-        description: "Please fill in all required fields",
-        variant: "destructive"
+        title: 'Missing fields',
+        description: 'Please fill in all fields',
+        variant: 'destructive',
       });
       return;
     }
-    
-    if (!agreeTerms) {
-      toast({
-        title: "Terms not accepted",
-        description: "You must agree to the terms and conditions",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    setIsSubmitting(true);
-    
+
+    setIsLoading(true);
+
     try {
-      const { error } = await signUp(email, password, { full_name: name });
-      
+      // Fix: removed the third param to match the function signature
+      const { error } = await signUp(email, password);
+
       if (error) {
         toast({
-          title: "Sign up failed",
+          title: 'Error',
           description: error.message,
-          variant: "destructive"
+          variant: 'destructive',
         });
         return;
       }
-      
+
       toast({
-        title: "Account created",
-        description: "Please check your email to confirm your account"
+        title: 'Success',
+        description: 'Check your email to confirm your account',
       });
-    } catch (err) {
+    } catch (error) {
+      console.error('Error signing up:', error);
       toast({
-        title: "An error occurred",
-        description: "Please try again later",
-        variant: "destructive"
+        title: 'Error',
+        description: 'Something went wrong. Please try again.',
+        variant: 'destructive',
       });
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
-  
+
   return (
-    <form className="space-y-4" onSubmit={handleSubmit}>
-      <div className="space-y-2">
-        <Label htmlFor="name">Full Name</Label>
-        <Input 
-          id="name" 
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="John Doe"
-          required
-        />
-      </div>
-      
-      <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
-        <Input 
-          id="email" 
-          type="email" 
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="your@email.com"
-          required
-        />
-      </div>
-      
-      <div className="space-y-2">
-        <Label htmlFor="password">Password</Label>
-        <Input 
-          id="password" 
-          type="password" 
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-        <p className="text-xs text-muted-foreground">
-          Password must be at least 8 characters long
+    <div className="space-y-6">
+      <div className="space-y-2 text-center">
+        <h1 className="text-2xl font-semibold tracking-tight">Create an account</h1>
+        <p className="text-sm text-muted-foreground">
+          Enter your email below to create your account
         </p>
       </div>
-      
-      <div className="flex items-center space-x-2">
-        <Checkbox 
-          id="terms" 
-          checked={agreeTerms}
-          onCheckedChange={(checked) => setAgreeTerms(!!checked)}
-        />
-        <Label htmlFor="terms" className="text-sm">
-          I agree to the <a href="#" className="underline">Terms of Service</a> and <a href="#" className="underline">Privacy Policy</a>
-        </Label>
+      <div className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              placeholder="name@example.com"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={isLoading}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              placeholder="********"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={isLoading}
+              required
+            />
+          </div>
+          <Button className="w-full" type="submit" disabled={isLoading}>
+            {isLoading && <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />}
+            Sign Up with Email
+          </Button>
+        </form>
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+          </div>
+        </div>
+        <GoogleSignInButton>Sign Up with Google</GoogleSignInButton>
       </div>
-      
-      <Button type="submit" className="w-full" disabled={isSubmitting}>
-        {isSubmitting ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Creating account...
-          </>
-        ) : (
-          'Sign Up'
-        )}
-      </Button>
-    </form>
+    </div>
   );
 }

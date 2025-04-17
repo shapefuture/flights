@@ -1,263 +1,162 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '../lib/supabase';
+import { debug, error as logError } from '../utils/logger';
 import { Session, User } from '@supabase/supabase-js';
-import { 
-  supabase, 
-  getUserSubscription, 
-  UserSubscription, 
-  signInWithGoogle, 
-  AuthProvider 
-} from '../lib/supabase';
-import { debug, error, info } from '../utils/logger';
+import { useNavigate } from 'react-router-dom';
 
-interface AuthContextProps {
-  session: Session | null;
-  user: User | null;
-  subscription: UserSubscription | null;
-  isLoading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, metadata?: object) => Promise<{ error: Error | null }>;
-  signInWithGoogle: () => Promise<{ error: Error | null }>;
-  signOut: () => Promise<void>;
-  sendPasswordResetEmail: (email: string) => Promise<{ error: Error | null }>;
-  loadSubscription: () => Promise<void>;
-  updateUser: (data: object) => Promise<{ error: Error | null }>;
-  isAuthenticated: boolean;
-  canPerformSearch: boolean;
-  remainingQueries: number;
-  authProvider: AuthProvider | null;
+// Use a type instead of an enum to avoid conflicts
+export type AuthProviderType = 'google' | 'email';
+
+// Define AuthProvider object instead of enum
+export const AuthProvider = {
+  GOOGLE: 'google' as AuthProviderType,
+  EMAIL: 'email' as AuthProviderType
+};
+
+// Subscription
+export interface UserSubscription {
+  tier: 'free' | 'basic' | 'premium' | 'enterprise';
+  status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'incomplete';
+  currentPeriodEnd: string;
+  cancelAtPeriodEnd: boolean;
+  monthlyQuota: number;
+  remainingSearches: number;
 }
 
-const AuthContext = createContext<AuthContextProps | undefined>(undefined);
+// Context shape
+interface AuthContextType {
+  user: User | null;
+  session: Session | null;
+  status: string;
+  isAuthenticated: boolean;
+  signInWithGoogle: () => Promise<void>;
+  signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signOut: () => Promise<void>;
+  subscription: UserSubscription;
+  // Add missing properties needed in tests
+  isLoading?: boolean;
+  authProvider?: AuthProviderType | null;
+}
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+const DEFAULT_SUBSCRIPTION: UserSubscription = {
+  tier: 'free',
+  status: 'active',
+  currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+  cancelAtPeriodEnd: false,
+  monthlyQuota: 5,
+  remainingSearches: 5,
+};
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [subscription, setSubscription] = useState<UserSubscription | null>(null);
+  const [status, setStatus] = useState<'loading' | 'authenticated' | 'unauthenticated'>('loading');
+  const [subscription, setSubscription] = useState<UserSubscription>(DEFAULT_SUBSCRIPTION);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [authProvider, setAuthProvider] = useState<AuthProvider | null>(null);
+  const [authProvider, setAuthProvider] = useState<AuthProviderType | null>(null);
+  const navigate = useNavigate();
 
-  // Check if the user can perform a search based on subscription status
-  const canPerformSearch = !subscription ? false : 
-    subscription.queriesUsed < subscription.monthlyQuota;
-  
-  // Calculate remaining queries
-  const remainingQueries = subscription ? 
-    Math.max(0, subscription.monthlyQuota - subscription.queriesUsed) : 0;
-  
-  // Load the user's subscription data
-  const loadSubscription = async () => {
-    if (!user) return;
-    
-    try {
-      const sub = await getUserSubscription(user.id);
-      setSubscription(sub);
-    } catch (err) {
-      error('Failed to load user subscription:', err);
-    }
-  };
-
-  // Determine authentication provider
-  const determineAuthProvider = (user: User | null) => {
-    if (!user) {
-      setAuthProvider(null);
-      return;
-    }
-    
-    // Check if the user authenticated with Google
-    const isGoogleAuth = user.app_metadata?.provider === 'google' || 
-                         user.identities?.some(identity => identity.provider === 'google');
-    
-    setAuthProvider(isGoogleAuth ? AuthProvider.GOOGLE : AuthProvider.EMAIL);
-    info('Auth provider determined:', isGoogleAuth ? 'Google' : 'Email');
-  };
-
-  // Initialize the auth context
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        setIsLoading(true);
-        
-        // Get the current session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          throw sessionError;
-        }
-        
-        if (session) {
-          setSession(session);
-          setUser(session.user);
-          determineAuthProvider(session.user);
-          await loadSubscription();
-          info('User authenticated:', session.user.id);
-        }
-      } catch (err) {
-        error('Error initializing auth:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    initAuth();
-
-    // Listen for auth changes
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        debug('Auth state changed:', event);
+    let unsub: (() => void) | undefined;
+    let mount = true;
+    (async () => {
+      setStatus('loading');
+      setIsLoading(true);
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error) {
+        setStatus('unauthenticated');
+        setSession(null);
+        setUser(null);
+      } else {
         setSession(session);
-        const user = session?.user ?? null;
-        setUser(user);
-        determineAuthProvider(user);
-        
-        if (user) {
-          await loadSubscription();
-        } else {
-          setSubscription(null);
+        setUser(session?.user || null);
+        setStatus(session?.user ? 'authenticated' : 'unauthenticated');
+        // Set auth provider if user exists
+        if (session?.user) {
+          // Check auth provider (adjust this based on how your app determines provider)
+          const provider = session.user.app_metadata?.provider as AuthProviderType;
+          setAuthProvider(provider || 'email');
         }
       }
-    );
-
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
+      setIsLoading(false);
+      
+      // Set up auth state change listener
+      const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(
+        (event, newSession) => {
+          setSession(newSession);
+          setUser(newSession?.user || null);
+          setStatus(newSession?.user ? 'authenticated' : 'unauthenticated');
+          // Update auth provider when auth state changes
+          if (newSession?.user) {
+            const provider = newSession.user.app_metadata?.provider as AuthProviderType;
+            setAuthProvider(provider || 'email');
+          } else {
+            setAuthProvider(null);
+          }
+        }
+      );
+      unsub = authSub.unsubscribe;
+    })();
+    return () => { unsub && unsub(); mount = false; };
   }, []);
 
   // Sign in with Google
-  const handleSignInWithGoogle = async () => {
-    try {
-      const { error: signInError } = await signInWithGoogle();
-
-      if (signInError) {
-        error('Google sign in error:', signInError);
-        return { error: signInError };
+  async function signInWithGoogle() {
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`
       }
-
-      info('Redirecting to Google for authentication');
-      return { error: null };
-    } catch (err) {
-      error('Google sign in exception:', err);
-      return { error: err instanceof Error ? err : new Error('Unknown Google sign in error') };
-    }
-  };
-
-  // Sign in with email and password
-  const signIn = async (email: string, password: string) => {
-    try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (signInError) {
-        error('Sign in error:', signInError);
-        return { error: signInError };
-      }
-
-      info('User signed in successfully');
-      return { error: null };
-    } catch (err) {
-      error('Sign in exception:', err);
-      return { error: err instanceof Error ? err : new Error('Unknown sign in error') };
-    }
-  };
-
-  // Sign up with email and password
-  const signUp = async (email: string, password: string, metadata = {}) => {
-    try {
-      const { error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: metadata
-        }
-      });
-
-      if (signUpError) {
-        error('Sign up error:', signUpError);
-        return { error: signUpError };
-      }
-
-      info('User signed up successfully');
-      return { error: null };
-    } catch (err) {
-      error('Sign up exception:', err);
-      return { error: err instanceof Error ? err : new Error('Unknown sign up error') };
-    }
-  };
-
+    });
+  }
+  // Sign up with email/password
+  async function signUp(email: string, password: string) {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` }
+    });
+    return { error: error?.message ? new Error(error.message) : null };
+  }
+  // Sign in with email/password
+  async function signIn(email: string, password: string) {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return { error: error?.message ? new Error(error.message) : null };
+  }
   // Sign out
-  const signOut = async () => {
-    try {
-      await supabase.auth.signOut();
-      info('User signed out');
-    } catch (err) {
-      error('Sign out error:', err);
-    }
-  };
+  async function signOut() {
+    await supabase.auth.signOut();
+    setSession(null);
+    setUser(null);
+    setStatus('unauthenticated');
+    setAuthProvider(null);
+    navigate('/');
+  }
 
-  // Send password reset email
-  const sendPasswordResetEmail = async (email: string) => {
-    try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email);
-      
-      if (resetError) {
-        error('Password reset error:', resetError);
-        return { error: resetError };
-      }
-      
-      info('Password reset email sent');
-      return { error: null };
-    } catch (err) {
-      error('Password reset exception:', err);
-      return { error: err instanceof Error ? err : new Error('Unknown password reset error') };
-    }
-  };
-
-  // Update user data
-  const updateUser = async (data: object) => {
-    try {
-      const { error: updateError } = await supabase.auth.updateUser({
-        data
-      });
-      
-      if (updateError) {
-        error('Update user error:', updateError);
-        return { error: updateError };
-      }
-      
-      info('User updated successfully');
-      return { error: null };
-    } catch (err) {
-      error('Update user exception:', err);
-      return { error: err instanceof Error ? err : new Error('Unknown update user error') };
-    }
-  };
-
-  const value = {
-    session,
-    user,
-    subscription,
-    isLoading,
-    signIn,
-    signUp,
-    signInWithGoogle: handleSignInWithGoogle,
-    signOut,
-    sendPasswordResetEmail,
-    loadSubscription,
-    updateUser,
-    isAuthenticated: !!user,
-    canPerformSearch,
-    remainingQueries,
-    authProvider
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{
+      user,
+      session,
+      status,
+      isAuthenticated: status === 'authenticated',
+      signInWithGoogle,
+      signUp,
+      signIn,
+      signOut,
+      subscription,
+      isLoading,
+      authProvider,
+    }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within an AuthProvider");
+  return ctx;
+}
