@@ -14,8 +14,24 @@ interface VoiceSearchProps {
   open: boolean;
 }
 
+// A map of UI lang to speech recognition language codes (expand as needed)
+const speechLangMap: Record<string, string> = {
+  en: 'en-US',
+  fr: 'fr-FR',
+  de: 'de-DE',
+  es: 'es-ES',
+  it: 'it-IT',
+  pt: 'pt-PT',
+  ru: 'ru-RU',
+  nl: 'nl-NL',
+  ja: 'ja-JP',
+  ko: 'ko-KR',
+  zh: 'zh-CN',
+  // Add more as needed
+};
+
 export function VoiceSearch({ onSearch, onClose, open }: VoiceSearchProps) {
-  const { t } = useTranslations();
+  const { t, lang } = useTranslations();
   const [isListening, setIsListening] = useState(false);
   const [progressValue, setProgressValue] = useState(0);
   const [showTips, setShowTips] = useState(false);
@@ -25,7 +41,11 @@ export function VoiceSearch({ onSearch, onClose, open }: VoiceSearchProps) {
   const micButtonRef = useRef<HTMLButtonElement>(null);
   const { toast } = useToast();
   const MAX_LISTENING_TIME = 15000; // 15 seconds max listening time
-  
+
+  // Determine browser language code for speech recognition
+  // Fallback to en-US if current lang not in the map
+  const speechLang = speechLangMap[lang as string] || 'en-US';
+
   const {
     transcript,
     startListening,
@@ -33,7 +53,7 @@ export function VoiceSearch({ onSearch, onClose, open }: VoiceSearchProps) {
     hasRecognitionSupport,
     error: recognitionError
   } = useVoiceRecognition({
-    language: 'en-US', // TODO: Make this dynamic based on selected language
+    language: speechLang,
     continuous: true,
     interimResults: true,
     onResult: (result, isFinal) => {
@@ -59,7 +79,7 @@ export function VoiceSearch({ onSearch, onClose, open }: VoiceSearchProps) {
       resetListening();
     }
   });
-  
+
   // Auto stop after MAX_LISTENING_TIME
   useEffect(() => {
     if (isListening) {
@@ -71,26 +91,26 @@ export function VoiceSearch({ onSearch, onClose, open }: VoiceSearchProps) {
           }
         }
       }, MAX_LISTENING_TIME);
-      
+
       return () => clearTimeout(timeout);
     }
   }, [isListening, transcript, stopListening]);
-  
+
   // Update progress bar
   useEffect(() => {
     if (isListening) {
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
       }
-      
+
       setProgressValue(0);
       const startTime = Date.now();
-      
+
       progressIntervalRef.current = window.setInterval(() => {
         const elapsed = Date.now() - startTime;
         const newProgress = Math.min((elapsed / MAX_LISTENING_TIME) * 100, 100);
         setProgressValue(newProgress);
-        
+
         if (newProgress >= 100) {
           clearInterval(progressIntervalRef.current as number);
         }
@@ -98,14 +118,14 @@ export function VoiceSearch({ onSearch, onClose, open }: VoiceSearchProps) {
     } else if (progressIntervalRef.current) {
       clearInterval(progressIntervalRef.current);
     }
-    
+
     return () => {
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
       }
     };
   }, [isListening]);
-  
+
   // Auto-focus the microphone button when the dialog opens
   useEffect(() => {
     if (open) {
@@ -114,7 +134,7 @@ export function VoiceSearch({ onSearch, onClose, open }: VoiceSearchProps) {
       }, 100);
     }
   }, [open]);
-  
+
   // Clean up the voice recognition when dialog closes
   useEffect(() => {
     if (!open && isListening) {
@@ -122,7 +142,7 @@ export function VoiceSearch({ onSearch, onClose, open }: VoiceSearchProps) {
       resetListening();
     }
   }, [open, isListening, stopListening]);
-  
+
   // Show a notification if speech recognition is not supported
   useEffect(() => {
     if (open && !hasRecognitionSupport) {
@@ -133,7 +153,7 @@ export function VoiceSearch({ onSearch, onClose, open }: VoiceSearchProps) {
       });
     }
   }, [open, hasRecognitionSupport, toast]);
-  
+
   const toggleListening = () => {
     if (isListening) {
       stopListening();
@@ -143,7 +163,7 @@ export function VoiceSearch({ onSearch, onClose, open }: VoiceSearchProps) {
       startListening();
     }
   };
-  
+
   const resetListening = () => {
     setIsListening(false);
     setProgressValue(0);
@@ -151,10 +171,10 @@ export function VoiceSearch({ onSearch, onClose, open }: VoiceSearchProps) {
       clearInterval(progressIntervalRef.current);
     }
   };
-  
+
   const handleVoiceResult = (text: string) => {
     setProcessingVoice(true);
-    
+
     // Add a small delay to give visual feedback
     setTimeout(() => {
       onSearch(text.trim());
@@ -163,9 +183,9 @@ export function VoiceSearch({ onSearch, onClose, open }: VoiceSearchProps) {
       onClose();
     }, 500);
   };
-  
+
   if (!open) return null;
-  
+
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="sm:max-w-[425px]">
