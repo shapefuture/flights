@@ -1,2 +1,8 @@
-// Export all types from FlightTypes.ts to make importing easier
-export * from './FlightTypes';
+export interface FlightSearch {
+  origin: string;
+  destination: string;
+  departureDate: string; // ISO/Date String
+  returnDate: string;    // ISO/Date String
+  passengers: number;
+  cabinClass: string;
+}

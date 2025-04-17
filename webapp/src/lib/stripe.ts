@@ -1,22 +1,6 @@
 import { loadStripe, Stripe } from '@stripe/stripe-js';
-import { debug, error } from '../utils/logger';
 
-let stripePromise: Promise<Stripe | null>;
-
-// Get Stripe instance
-export const getStripe = () => {
-  if (!stripePromise) {
-    const key = import.meta.env?.VITE_STRIPE_PUBLISHABLE_KEY;
-    if (!key) {
-      error('Missing Stripe publishable key');
-      throw new Error('Missing Stripe publishable key');
-    }
-    stripePromise = loadStripe(key);
-  }
-  return stripePromise;
-};
-
-// Subscription plans
+// SubscriptionPlan type
 export interface SubscriptionPlan {
   id: string;
   name: string;
@@ -36,11 +20,7 @@ export const subscriptionPlans: SubscriptionPlan[] = [
     id: 'basic',
     name: 'Basic',
     description: 'Perfect for casual travelers',
-    features: [
-      '20 searches per month',
-      'Basic flight details',
-      'Email support',
-    ],
+    features: ['20 searches per month', 'Basic flight details', 'Email support'],
     priceMonthly: 4.99,
     priceYearly: 49.99,
     monthlyQuota: 20,
@@ -89,49 +69,34 @@ export const subscriptionPlans: SubscriptionPlan[] = [
   },
 ];
 
-// Create Stripe checkout session
+// Helper: get Stripe instance
+let stripePromise: Promise<Stripe | null> | undefined;
+export function getStripe() {
+  if (!stripePromise) {
+    const key =
+      import.meta.env?.VITE_STRIPE_PUBLISHABLE_KEY ||
+      'pk_test_stripe_publishable_key_placeholder';
+    stripePromise = loadStripe(key);
+  }
+  return stripePromise;
+}
+
 export async function createCheckoutSession(
   priceId: string,
   successUrl: string,
   cancelUrl: string,
   customerId?: string
 ): Promise<string | null> {
-  try {
-    // In a real app, this would be a serverless function call
-    // Here we're mocking it for demonstration
-    
-    debug('Creating checkout session', { priceId, customerId });
-    
-    // Mock checkout session URL for demo purposes
-    const sessionUrl = `https://checkout.stripe.com/mock-session?price=${priceId}`;
-    
-    return sessionUrl;
-  } catch (err) {
-    error('Error creating checkout session:', err);
-    return null;
-  }
+  // Example: Should use actual endpoint or API
+  return `https://checkout.stripe.com/mock-session?price=${priceId}`;
 }
 
-// Create customer portal session
 export async function createCustomerPortalSession(
   customerId: string,
   returnUrl: string
 ): Promise<string | null> {
-  try {
-    // In a real app, this would be a serverless function call
-    // Here we're mocking it for demonstration
-    
-    debug('Creating customer portal session', { customerId });
-    
-    // Mock portal URL for demo purposes
-    const portalUrl = `https://billing.stripe.com/mock-portal?customer=${customerId}`;
-    
-    return portalUrl;
-  } catch (err) {
-    error('Error creating customer portal session:', err);
-    return null;
-  }
+  // Example: Should use actual endpoint or API
+  return `https://billing.stripe.com/mock-portal?customer=${customerId}`;
 }
 
-// Also export a default stripePromise for components that need direct access
-export default getStripe();
+export default getStripe;
