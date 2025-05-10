@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { debug, error, info } from '../utils/logger';
+import { debug, error as loggerError, info } from '../utils/logger';
 
 interface VoiceRecognitionOptions {
   language?: string;
@@ -49,7 +49,7 @@ export function useVoiceRecognition(options: VoiceRecognitionOptions = {}): UseV
         
         debug('Voice recognition initialized successfully');
       } catch (err) {
-        error('Error initializing voice recognition:', err);
+        loggerError('Error initializing voice recognition:', err);
         setError(err instanceof Error ? err : new Error('Failed to initialize voice recognition'));
         setHasRecognitionSupport(false);
       }
@@ -94,7 +94,7 @@ export function useVoiceRecognition(options: VoiceRecognitionOptions = {}): UseV
           options.onResult(currentTranscript, !!finalTranscript);
         }
       } catch (err) {
-        error('Error handling recognition result:', err);
+        loggerError('Error handling recognition result:', err);
       }
     };
     
@@ -134,7 +134,9 @@ export function useVoiceRecognition(options: VoiceRecognitionOptions = {}): UseV
   // Start listening
   const startListening = useCallback(() => {
     if (!recognition || !hasRecognitionSupport) {
-      error('Cannot start listening: Speech recognition not supported or not initialized');
+      // Properly create a new Error object
+      setError(new Error('Cannot start listening: Speech recognition not supported or not initialized'));
+      loggerError('Cannot start listening: Speech recognition not supported or not initialized');
       return;
     }
     
@@ -149,7 +151,7 @@ export function useVoiceRecognition(options: VoiceRecognitionOptions = {}): UseV
       
       info('Voice recognition started');
     } catch (err) {
-      error('Error starting voice recognition:', err);
+      loggerError('Error starting voice recognition:', err);
       setError(err instanceof Error ? err : new Error('Failed to start voice recognition'));
     }
   }, [recognition, hasRecognitionSupport, options]);
@@ -164,7 +166,8 @@ export function useVoiceRecognition(options: VoiceRecognitionOptions = {}): UseV
       recognition.stop();
       info('Voice recognition stopped');
     } catch (err) {
-      error('Error stopping voice recognition:', err);
+      loggerError('Error stopping voice recognition:', err);
+      setError(err instanceof Error ? err : new Error('Failed to stop voice recognition'));
     }
   }, [recognition, hasRecognitionSupport, isListening]);
   
